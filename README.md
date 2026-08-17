@@ -83,11 +83,14 @@ Squash/rebase merges are often **not** git-ancestors of the default branch, so a
 
 ## Caller example
 
+Do not add `on: create`. A tag push already fires `push`, so `create` runs the same job twice.
+
+`workflow_dispatch` only shows **Run workflow** in the Actions UI after this file exists on the repository **default branch**.
+
 ```yaml
 name: Push mirror to GitLab
 on:
   push:
-  create:
   workflow_dispatch:
     inputs:
       ref:
@@ -101,7 +104,6 @@ concurrency:
 
 jobs:
   mirror:
-    if: github.event_name != 'create' || github.event.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,7 +128,8 @@ jobs:
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
 
-## Test pair
+## Tests
+
+Remote tests (updates, GitLab knobs, then the other direction) are driven from your machine. The Action is not invoked locally; GitHub Actions and GitLab’s native push mirror are the systems under test. See [tests/README.md](tests/README.md) and run `./tests/run.sh`.
 
 [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror) is a sample caller. Its destination is set via `vars.GITLAB_URL` (for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`).
-# mirroring

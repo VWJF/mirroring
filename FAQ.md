@@ -142,6 +142,10 @@ This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Callers us
 
 Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `scripts/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
 
+### Can the manual mirror tests be automated?
+
+**Yes, as a local driver against real remotes.** `./tests/run.sh` uses `gh` and `glab` logins (public vs private does not change the command). It pushes disposable refs, waits for the caller workflow or GitLab’s native push mirror, and asserts the other side. It does not run `mirror.sh` locally. The seven tests are described in [tests/README.md](tests/README.md).
+
 ### What is out of scope for v1?
 
 - Regex branch allowlists

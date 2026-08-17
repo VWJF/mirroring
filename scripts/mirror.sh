@@ -93,6 +93,7 @@ FULL_REF=""
 DELETED="false"
 SOURCE_SHA=""
 
+# GitHub does not send one shape of "the ref that changed."
 parse_event() {
   case "$EVENT_NAME" in
     push)
@@ -169,6 +170,7 @@ parse_event() {
     || die "Could not determine the ref to mirror from event '${EVENT_NAME}'."
 }
 
+# "Is this branch protected?" has two GitHub API endpoints to check.
 # Prints "true", "false", or "unknown".
 branch_protection_state() {
   local branch="$1"
@@ -200,6 +202,7 @@ branch_protection_state() {
   printf 'unknown'
 }
 
+# Boolean wrapper for branch_protection_state.
 ensure_protected_or_skip() {
   [[ "$REF_KIND" == "branch" ]] || return 0
   is_true "$ONLY_PROTECTED_BRANCHES" || return 0
@@ -225,11 +228,13 @@ gitlab_ls_remote() {
   git ls-remote --quiet gitlab "$spec" 2>/dev/null | awk '{print $1; exit}'
 }
 
+# Make origin look like a full remote, not a second policy layer.
 fetch_github_objects() {
   run_git git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune || true
   run_git git fetch origin '+refs/tags/*:refs/tags/*' || true
 }
 
+# The event SHA is not always the object you should push.
 resolve_source_sha() {
   if [[ "$DELETED" == "true" ]]; then
     return 0
@@ -258,6 +263,7 @@ resolve_source_sha() {
     || die "Could not resolve the source SHA for ${FULL_REF}."
 }
 
+# Is this SHA in default's history? GitLab's mirroring only deletes dest branches that were deleted and merged.
 is_merged_into_default() {
   local sha="$1"
   [[ -n "$sha" && "$sha" != "$ZERO_SHA" ]] || return 1
