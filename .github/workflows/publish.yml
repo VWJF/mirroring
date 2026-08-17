@@ -1,0 +1,80 @@
+name: Publish image
+
+# Image builder only. Does not create a git tag or pin action.yml.
+# Operators: dispatch with `version` so GHCR exists before Bump image commits the pin.
+run-name: Publish image ${{ inputs.version || github.ref_name }}
+
+on:
+  push:
+    tags:
+      # Semver with optional v-prefix, including pre-releases (e.g. 0.0.2-alpha, v0.0.2-alpha).
+      - "v*.*.*"
+      - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >
+          Image version to push to GHCR (e.g. 0.0.3-alpha). Leading v is stripped.
+          Pushes tags 0.0.3-alpha and v0.0.3-alpha. Does not create a git tag.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Normalize version
+        id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            raw="$DISPATCH_VERSION"
+          else
+            raw="${GITHUB_REF_NAME}"
+          fi
+          raw="${raw#"${raw%%[![:space:]]*}"}"
+          raw="${raw%"${raw##*[![:space:]]}"}"
+          raw="${raw#v}"
+          if [[ ! "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$raw' (expected semver, e.g. 0.0.3-alpha)"
+            exit 1
+          fi
+          echo "version=$raw" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},prefix=v
+            type=semver,pattern={{major}}.{{minor}},prefix=v
+            type=semver,pattern={{major}},prefix=v
+            type=sha,prefix=sha-,enable=${{ github.event_name == 'push' }}
+            type=raw,value=${{ steps.ver.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=v${{ steps.ver.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

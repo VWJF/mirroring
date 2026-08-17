@@ -1,11 +1,19 @@
 # GitHub → GitLab push-mirror Action
 
-Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same knobs and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/).
+Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same knobs and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/). It is a **hybrid**: a composite Action still does skip-actor and `actions/checkout` on the runner; only `mirror.sh` (the GitLab push) runs in Docker.
 
 - **Standalone:** GitHub → GitLab only. GitLab’s native mirror is not required.
 - **Bidirectional:** this Action plus GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
 
-Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
+Pin a SemVer tag, not `@main`:
+
+- `uses: VWJF/mirroring@v1` — moving major (receives patches)
+- `uses: VWJF/mirroring@v1.2.3` — exact release
+- SHA is still valid for bisect
+
+The first release of this packaging is `v1.0.0`. Self-hosted runners need Docker for the mirror step.
+
+Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
 See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
@@ -17,7 +25,7 @@ Not mirrored: issues, pull requests / merge requests, branch protection, secrets
 
 The Action never runs `git push --mirror`. It only updates the **event’s ref**.
 
-This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `scripts/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run.
+This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `src/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`.
 
 ## Inputs
 
@@ -52,7 +60,7 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 
 ### GitHub
 
-1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`). See [Caller example](#caller-example).
+1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@v1`). See [Caller example](#caller-example).
 2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
 
    ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
@@ -184,7 +192,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           lfs: true
-      - uses: VWJF/mirroring@main
+      - uses: VWJF/mirroring@v1
         with:
           gitlab_url: ${{ vars.GITLAB_URL }}
           gitlab_username: ${{ vars.GITLAB_USERNAME || 'oauth2' }}
@@ -199,6 +207,34 @@ jobs:
 > `cancel-in-progress` must stay **false** so an in-flight `git push` is not aborted.
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
+
+## Publishing a release
+
+The GHCR image must exist **before** callers can use a docker-pinned Action. Do not retag an existing release. Bump is for **any** version (stable or pre-release); a `-` in the version (for example `-alpha`) only means you should pass `--prerelease` when you create the GitHub Release.
+
+1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag or change `action.yml`.
+2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This **retags** the existing `uses: docker://ghcr.io/vwjf/mirroring:<old>` pin in root `action.yml` to that version and commits that file on the branch you ran on (`chore: pin mirror image to <version>`). It no-ops if the pin is already that tag, and fails if GHCR has no such image (run Publish first) or if `action.yml` has no `docker://` pin (it does not convert a bash or docker-build step). It does **not** create a git tag or GitHub Release.
+3. **You** tag and create the GitHub Release (pre-release when the version contains `-`, e.g. `*-alpha`):
+
+```bash
+git pull
+git tag -a 0.0.3-alpha -m "0.0.3-alpha"
+git push origin 0.0.3-alpha
+gh release create 0.0.3-alpha --title 0.0.3-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.0.3-alpha." --prerelease
+```
+
+Omit `--prerelease` for a stable `x.y.z`. Callers then pin `uses: VWJF/mirroring@0.0.3-alpha`.
+
+From the CLI (needed until these workflows exist on the default branch):
+
+```bash
+gh workflow run publish.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Publish image is green
+gh workflow run bump-image.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Bump image is green (action.yml committed), then tag + gh release create as above
+```
+
+Pushing a matching git tag still runs Publish image. Prefer dispatch so the image exists before you tag the Action.
 
 ## Tests
 

@@ -1,0 +1,11 @@
+# Build context is the repository root (`docker build .`).
+.git
+.github
+.gitignore
+.DS_Store
+docs
+tests
+*.md
+**/*.md
+action.yml
+src/skip-actor.sh
