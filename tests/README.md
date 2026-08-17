@@ -89,7 +89,7 @@ Log in once (`gh auth login`, `glab auth login --hostname <gitlab>`). Tokens com
 
 ```bash
 export GITHUB_REPO=VWJF/temp-mirror
-export SOURCE_BRANCH=feat/github-gitlab-push-mirror   # until the workflow is on main
+export SOURCE_BRANCH=main
 export GITLAB_URL=https://gitlab.rcg.sfu.ca/isahay/temp-mirror.git
 ./tests/run.sh          # all seven; 5–7 skip themselves if not set up
 ./tests/run.sh 1 2      # optional: README numbers only
