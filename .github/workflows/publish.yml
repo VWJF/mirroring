@@ -3,7 +3,9 @@ name: Publish image
 on:
   push:
     tags:
+      # Semver with optional v-prefix, including pre-releases (e.g. 0.0.2-alpha, v0.0.2-alpha).
       - "v*.*.*"
+      - "*.*.*"
 
 permissions:
   contents: read
@@ -28,9 +30,10 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},prefix=v
+            type=semver,pattern={{major}}.{{minor}},prefix=v
+            type=semver,pattern={{major}},prefix=v
             type=sha,prefix=sha-
 
       - uses: docker/build-push-action@v6
