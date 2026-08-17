@@ -47,6 +47,8 @@ If you mirror to a public GitHub repo, that **git history is public**. The Actio
 
 For bidirectional mirroring, set **true on both** this Action and GitLab’s native push mirror.
 
+These are **two independent checkboxes**. This Action’s `keep_divergent_refs: true` only governs **GitHub → GitLab**. It does **not** constrain GitLab’s native push mirror. GitLab’s default is **overwrite** (`Keep divergent refs` **off**). If that box is left at default, GitLab will force-update GitHub when the tips diverge, even though the Action would have failed closed the other way. Enable **Keep divergent refs** on the GitLab mirror, or GitHub history can be rewritten.
+
 ### Is “only protected branches” a parameter?
 
 **Yes.** `only_protected_branches`, default `true` (safest). Keep GitHub and GitLab protection lists in sync. Tags are still created/updated when this is true.
@@ -114,6 +116,19 @@ Extra failure modes even when targets started in sync:
 
 **Recovery (manual):** on one machine, fetch both remotes, merge or rebase the two target tips until they share one tip, push that tip to **one** remote, let mirroring copy it, then close leftover PRs/MRs. Do not merge the same feature independently on both sides.
 
+### The GitHub→GitLab job failed, so I edited GitLab `main` to debug. GitHub history vanished.
+
+That is expected once the tips have diverged, and it is easy to do by accident.
+
+1. A GitHub merge to `main` runs this Action. If GitLab **rejects** the push (Developer token on protected `main`, missing Maintainer, etc.), **GitHub already has the merge** and GitLab does not. The branch has diverged.
+2. Editing `main` on GitLab creates a **third** history (GitLab-only commits) that is not an ancestor of GitHub’s merge.
+3. GitLab’s native **push** mirror then copies GitLab → GitHub. GitLab’s default is **overwrite** (`keep_divergent_refs` **false**). That is a force-update of GitHub `main`. Commits that existed only on GitHub (the merge that never synced) **disappear** from GitHub `main`.
+4. GitHub “Allow force pushes” unchecked is not a reliable backstop. If the mirror PAT is an admin, or **Enforce admins** is off, GitHub can still accept the overwrite.
+
+**Do not** push new commits to the lagging side to “test” the other mirror. Fetch both remotes, integrate the two tips locally, push to **one** remote, let mirroring copy.
+
+For bidirectional use, set **Keep divergent refs** on GitLab’s native mirror **and** `keep_divergent_refs: true` on this Action, and use a Maintainer token so the Action can actually update protected `main`.
+
 ### Why not auto-merge diverged targets or enforce a single merge gate?
 
 Rejected for v1. Auto-merge is not GitLab push-mirror behavior and can create unexpected commits. A one-platform merge gate (humans merge `main` only on GitHub or only on GitLab) is **operational advice**, not encoded in the Action.
@@ -122,9 +137,9 @@ Rejected for v1. Auto-merge is not GitLab push-mirror behavior and can create un
 
 ### What tokens are required?
 
-- **GitLab (`gitlab_token`):** `write_repository`. The token user must be allowed to push (and, if you delete merged branches, delete) protected branches.
+- **GitLab (`gitlab_token`):** `write_repository`. The token must be allowed to push protected branches (and delete them if you prune merged branches). **Developer is not enough** for GitLab’s default protected `main`: that list is Maintainers only, so you get `You are not allowed to push code to protected branches`. Use a project/personal token with role **Maintainer**, or add Developers to Allowed to push. You do not need to unprotect `main`. “Allowed to force push” is separate; leave it off when `keep_divergent_refs` is `true` (fast-forward only).
 - **GitHub (`github_token`):** clone if the source is private; read branches/rulesets for `only_protected_branches`. Fine-grained: Contents read; add more if the protection APIs return 403.
-- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with Contents write, and Workflows write if `.github/workflows` exists.
+- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with **Metadata: read** and **Contents (code): read/write**, and Workflows write if `.github/workflows` exists.
 
 Use **HTTPS**. GitLab cannot push LFS over SSH. Both remotes must use the same object format. GitHub’s 100 MB / LFS limits still apply when GitLab is the destination.
 

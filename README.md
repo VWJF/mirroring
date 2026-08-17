@@ -25,7 +25,7 @@ This Action lives in its own repository, so `actions/checkout` of the **source**
 | --- | --- | --- | --- |
 | `gitlab_url` | yes | — | HTTPS clone URL of the GitLab destination |
 | `gitlab_username` | no | `oauth2` | HTTPS username (typical for a PAT) |
-| `gitlab_token` | yes | — | Token with `write_repository`, allowed to push protected branches |
+| `gitlab_token` | yes | — | Token with `write_repository`. For protected `main`, GitLab role **Maintainer** (Developer cannot push protected branches) |
 | `github_token` | no | `github.token` | Clone GitHub if private; query branch protection |
 | `only_protected_branches` | no | `true` | Skip unprotected GitHub branches (tags still sync) |
 | `keep_divergent_refs` | no | `true` | Do not force-push or delete dest-only refs; fail if GitLab diverged |
@@ -36,7 +36,10 @@ GitLab’s native default for keep-divergent is **overwrite** (`false`). This Ac
 ## Standalone setup (GitHub → GitLab)
 
 1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`).
-2. Add repository secret `GITLAB_TOKEN` (GitLab PAT / project token with `write_repository`).
+2. Add repository secret `GITLAB_TOKEN` (GitLab PAT / project token with `write_repository`). GitLab **protected** `main` does **not** need to be unprotected: the token must be **allowed to push** that branch. A project access token with role **Developer** is not enough — GitLab only lets **Maintainers** (or whoever is listed under Allowed to push) update protected branches. Use role **Maintainer**. Typical scopes: `api`, `read_repository`, `write_repository`. Leave “Allowed to force push” off unless `keep_divergent_refs` is `false`. Unprotecting `main` is a shortcut, not a requirement.
+
+   ![GitLab project access token: role Maintainer, scopes api / read_repository / write_repository](docs/gitlab-project-access-token.png)
+
 3. Set repository variable `GITLAB_URL` (HTTPS clone URL). Optionally:
    - `GITLAB_USERNAME` (default `oauth2`)
    - `ONLY_PROTECTED_BRANCHES` (`true`/`false`)
@@ -55,12 +58,33 @@ GitHub → GitLab is this Action (near-immediate). GitLab → GitHub is GitLab�
    - Direction: **Push**
    - URL: `https://github.com/<owner>/<repo>.git`
    - Username: the dedicated GitHub account
-   - Password: a GitHub PAT with **Contents: read/write**. If the repo contains `.github/workflows`, also grant **Workflows: read/write**.
-   - Enable **Keep divergent refs**
+   - Password: a GitHub PAT with **Metadata: read** and **Contents (code): read/write**. If the repo contains `.github/workflows`, also grant **Workflows: read/write**.
+
+     ![GitHub PAT repository permissions: Metadata read, Contents (code) read and write](docs/github-pat-permissions.png)
+
+   - Enable **Keep divergent refs** (GitLab’s default is **off** = overwrite GitHub; this Action cannot override that)
    - Enable **Only mirror protected branches** if that matches the Action
 4. Set GitHub Actions variable `SKIP_GITHUB_ACTORS` to that dedicated username (or `your-app[bot]`).
-5. Set `KEEP_DIVERGENT_REFS` to `true` on the Action (default) **and** on GitLab.
+5. Set `KEEP_DIVERGENT_REFS` to `true` on the Action (default) **and** on GitLab. They are independent: the Action never changes GitLab’s mirror setting.
 6. Protect `main` (and any other mirrored targets) on **both** remotes. Do not rewrite mirrored history.
+
+### Match GitHub variables to the GitLab mirror
+
+The GitHub Actions **repository variables** and GitLab **Add new mirror repository** checkboxes are **independent**. They must be set to the same policy, or one side will overwrite the other.
+
+| Policy | GitHub variable | GitLab mirror checkbox |
+| --- | --- | --- |
+| Keep divergent refs (fail closed; **required for bidirectional**) | `KEEP_DIVERGENT_REFS=true` | **Keep divergent refs** checked |
+| Overwrite destination (can **lose commits**) | `KEEP_DIVERGENT_REFS=false` | **Keep divergent refs** unchecked (GitLab’s **default**) |
+| Only protected branches | `ONLY_PROTECTED_BRANCHES=true` | **Mirror only protected branches** checked |
+
+GitLab’s default is **not** to keep divergent refs: it **force-pushes** over diverged refs on GitHub. After the mirror exists, that checkbox can only be changed via the API. This Action’s default is the opposite (`keep_divergent_refs: true`). If you leave GitLab at default, GitHub history can disappear even when the Action would have failed closed.
+
+The screenshots below show the **dangerous** pairing (both overwrite): GitHub `KEEP_DIVERGENT_REFS=false` and GitLab **Keep divergent refs** unchecked. For bidirectional use, set **both** to keep divergent refs (`true` / checked).
+
+![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
+
+![GitLab Add new mirror repository: Keep divergent refs unchecked by default](docs/gitlab-push-mirror.png)
 
 Loop safety is both:
 
@@ -70,6 +94,8 @@ Loop safety is both:
 ### After a divergence
 
 If the same branch (including a merge to `main`) moved on both sides, a non-fast-forward is expected. With `keep_divergent_refs: true` the job fails and **neither history is overwritten**.
+
+**Do not “fix” a failed GitHub→GitLab sync by editing `main` on GitLab.** The two tips have already diverged. GitLab’s native push mirror defaults to **overwrite** (`keep_divergent_refs` off). That force-update can land on GitHub and **drop commits that only existed on GitHub** (a merge that never reached GitLab, for example). GitHub’s “Allow force pushes: off” does not always stop this if the mirror user can bypass protection (admins, or enforce-admins off).
 
 Recovery (manual; the Action does not merge for you):
 
