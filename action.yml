@@ -70,10 +70,13 @@ runs:
     # composite action.yml cannot use the github context in `uses`.
     # Bump image pins `uses: docker://ghcr.io/vwjf/mirroring:<tag>` after Publish
     # image has pushed that tag. Until then, build from action_path.
-    # Runner-bash: run: bash "${{ github.action_path }}/scripts/mirror.sh"
+
+    # Runner-bash invocation of scripts/mirror.sh (scripts/*.sh are not deprecated).
+    # The Docker and bash invocation steps are side-to-side, not replacement.
     - name: Mirror ref to GitLab
       if: steps.skip_actor.outputs.skip != 'true'
-      shell: bash
+      uses: VWJF/mirroring/mirror@${{ github.action_ref }}
+      # shell: bash
       env:
         GITLAB_URL: ${{ inputs.gitlab_url }}
         GITLAB_USERNAME: ${{ inputs.gitlab_username }}
@@ -82,5 +85,6 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         ONLY_PROTECTED_BRANCHES: ${{ inputs.only_protected_branches }}
         KEEP_DIVERGENT_REFS: ${{ inputs.keep_divergent_refs }}
-        MIRROR_IMAGE_CONTEXT: ${{ github.action_path }}/mirror
-      run: bash "${{ github.action_path }}/scripts/run-mirror-docker.sh"
+        ACTION_PATH: /opt/mirroring
+      #   ACTION_PATH: ${{ github.action_path }}
+      # run: bash "${{ github.action_path }}/scripts/mirror.sh"
