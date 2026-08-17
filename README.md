@@ -208,6 +208,24 @@ jobs:
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
 
+## Publishing a release
+
+The GHCR image must exist **before** the git tag callers pin. Do not tag first. Do not retag an existing release.
+
+1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag.
+2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This pins root `action.yml` to `uses: docker://ghcr.io/vwjf/mirroring:0.0.3-alpha`, commits, and creates the annotated git tag / GitHub Release (`--prerelease` when the version contains `-`).
+3. Callers pin `uses: VWJF/mirroring@0.0.3-alpha`.
+
+From the CLI (needed until these workflows exist on the default branch):
+
+```bash
+gh workflow run publish.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Publish image is green
+gh workflow run bump-image.yml --ref dockerize -f version=0.0.3-alpha
+```
+
+Pushing a matching git tag still runs Publish image. Prefer dispatch when the image must exist before the Action tag.
+
 ## Tests
 
 Remote tests (updates, GitLab knobs, then the other direction) are driven from your machine. The Action is not invoked locally; GitHub Actions and GitLab’s native push mirror are the systems under test. See [tests/README.md](tests/README.md) and run `./tests/run.sh`.

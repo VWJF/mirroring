@@ -66,8 +66,10 @@ runs:
         # so ancestry checks still have a repository.
         ref: ${{ github.event.deleted && github.event.repository.default_branch || github.sha }}
 
-    # Docker via `uses: …/mirror@${{ github.action_ref }}` is invalid: composite
-    # action.yml cannot use the github context in `uses`. Build from action_path.
+    # Nested uses: VWJF/mirroring/mirror@${{ github.action_ref }} is invalid:
+    # composite action.yml cannot use the github context in `uses`.
+    # Bump image pins `uses: docker://ghcr.io/vwjf/mirroring:<tag>` after Publish
+    # image has pushed that tag. Until then, build from action_path.
     # Runner-bash: run: bash "${{ github.action_path }}/scripts/mirror.sh"
     - name: Mirror ref to GitLab
       if: steps.skip_actor.outputs.skip != 'true'
