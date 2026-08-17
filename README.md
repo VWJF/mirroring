@@ -53,7 +53,10 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 ### GitHub
 
 1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`). See [Caller example](#caller-example).
-2. Add repository **secret** `GITLAB_TOKEN`. Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
+2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
+
+   ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.png)
+
 3. Set repository **variables** (Settings → Secrets and variables → Actions → Variables):
    - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`
    - `GITLAB_USERNAME` (optional; default `oauth2`)
@@ -97,7 +100,7 @@ Do this after the GitHub variables and (for bidirectional) the dedicated PAT exi
    ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.jpeg)
 
 > [!CAUTION]
-> GitLab’s default is **Keep divergent refs** **unchecked**: it **force-pushes** over diverged refs on GitHub. This Action cannot override that checkbox. After the mirror exists, the setting can only be changed via the API. If you leave the default, GitHub history can disappear even when the Action would have failed closed.
+> GitLab’s default is **Keep divergent refs** **unchecked**: it **force-pushes** over diverged refs on GitHub. This Action cannot override that checkbox. After the mirror is configured in GitLab, the setting can only be changed by recreating the mirror config (or via the API). If you leave it unchecked (the default), then GitLab may force overwrite GitHub history and you may loose commits.
 
    Fill in:
    - Direction: **Push**
