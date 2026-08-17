@@ -97,7 +97,7 @@ Do this after the GitHub variables and (for bidirectional) the dedicated PAT exi
 
 4. **Bidirectional only:** **Settings → Repository → Mirroring repositories** → **Add new mirror repository**. Check **Keep divergent refs** before you save.
 
-   ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.jpeg)
+   ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.png)
 
 > [!CAUTION]
 > GitLab’s default is **Keep divergent refs** **unchecked**: it **force-pushes** over diverged refs on GitHub. This Action cannot override that checkbox. After the mirror is configured in GitLab, the setting can only be changed by recreating the mirror config (or via the API). If you leave it unchecked (the default), then GitLab may force overwrite GitHub history and you may loose commits.
