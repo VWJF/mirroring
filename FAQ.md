@@ -24,7 +24,7 @@ They solve a **different problem**: one-way “copy git objects to another remot
 - **Pros:** Makes the destination identical in one shot; SSH; works for remotes other than GitLab; Docker isolates the SSH key on the container.
 - **Cons / shortcomings:** Closer to `git push --mirror` than GitLab push-mirror. Unmerged destination-only branches are deleted. Diverged tips are overwritten. Unsafe next to GitLab’s native push mirror (a GitLab→GitHub push would retrigger it and it would force+prune GitLab back to GitHub’s full ref set). SSH only (`StrictHostKeyChecking=no`). Old Alpine image. No GitLab knobs, no loop guards.
 
-**This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Composite bash (no Docker); HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
+**This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Hybrid packaging: composite skip-actor + checkout on the runner; `mirror.sh` in Docker. HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
 
 | | SvanBoxel | pixta | This Action |
 | --- | --- | --- | --- |
@@ -34,7 +34,7 @@ They solve a **different problem**: one-way “copy git objects to another remot
 | Destination-only refs | Left | Pruned | Left, or merged-branch delete |
 | Bidirectional / loop guard | No | No (would overwrite) | Actor skip + SHA no-op |
 | Transport | HTTPS + PAT | SSH key | HTTPS + PAT |
-| Packaging | Docker | Docker | Composite |
+| Packaging | Docker | Docker | Hybrid (composite + Docker `mirror.sh`) |
 
 **Choice:** do not use those Actions as the GitHub half of a GitLab native push-mirror pair. Use SvanBoxel if you need GitLab CI status back on GitHub. Use pixta if the destination is a disposable copy you are willing to force-update and prune.
 
@@ -187,9 +187,11 @@ The Action prints GitLab’s message (with tokens redacted). Common causes: prot
 
 ### Where does the Action live?
 
-This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
+This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Prefer SemVer pins: `uses: VWJF/mirroring@v1` (moving major) or `uses: VWJF/mirroring@v1.2.3` (exact). SHA still works for bisect. Do not use `@main` as the production pin. Images published to GHCR on `vMAJOR.MINOR.PATCH` tags also get moving `vMAJOR` / `vMAJOR.MINOR` and `sha-…` tags; `latest` is not the recommended runtime pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
 Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `scripts/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
+
+Skip-actor and checkout stay on the runner (composite). Only the GitLab push (`mirror.sh` + `askpass.sh`) runs in the container, with `git`, `git-lfs`, `jq`, and `gh` pinned in the image rather than whatever the runner has. Self-hosted runners need Docker for that step. Credential handling is unchanged: process-scoped `GIT_ASKPASS` and `git -c`, no `~/.gitconfig`.
 
 ### Can the manual mirror tests be automated?
 

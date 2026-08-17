@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check Docker copies match scripts/
+        run: |
+          diff -q scripts/mirror.sh mirror/scripts/mirror.sh
+          diff -q scripts/askpass.sh mirror/scripts/askpass.sh
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh mirror/entrypoint.sh
+
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: mirror/Dockerfile
+
+      - name: Docker build
+        run: docker build -f mirror/Dockerfile -t mirroring:ci ./mirror

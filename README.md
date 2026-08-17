@@ -1,11 +1,19 @@
 # GitHub → GitLab push-mirror Action
 
-Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same knobs and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/).
+Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same knobs and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/). It is a **hybrid**: a composite Action still does skip-actor and `actions/checkout` on the runner; only `mirror.sh` (the GitLab push) runs in Docker.
 
 - **Standalone:** GitHub → GitLab only. GitLab’s native mirror is not required.
 - **Bidirectional:** this Action plus GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
 
-Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
+Pin a SemVer tag, not `@main`:
+
+- `uses: VWJF/mirroring@v1` — moving major (receives patches)
+- `uses: VWJF/mirroring@v1.2.3` — exact release
+- SHA is still valid for bisect
+
+The first release of this packaging is `v1.0.0`. Self-hosted runners need Docker for the mirror step.
+
+Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
 See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
@@ -17,7 +25,7 @@ Not mirrored: issues, pull requests / merge requests, branch protection, secrets
 
 The Action never runs `git push --mirror`. It only updates the **event’s ref**.
 
-This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `scripts/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run.
+This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `scripts/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`.
 
 ## Inputs
 
@@ -52,7 +60,7 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 
 ### GitHub
 
-1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`). See [Caller example](#caller-example).
+1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@v1`). See [Caller example](#caller-example).
 2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
 
    ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
@@ -184,7 +192,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           lfs: true
-      - uses: VWJF/mirroring@main
+      - uses: VWJF/mirroring@v1
         with:
           gitlab_url: ${{ vars.GITLAB_URL }}
           gitlab_username: ${{ vars.GITLAB_USERNAME || 'oauth2' }}
