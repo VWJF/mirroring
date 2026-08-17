@@ -15,16 +15,36 @@ jobs:
           diff -q scripts/mirror.sh mirror/scripts/mirror.sh
           diff -q scripts/askpass.sh mirror/scripts/askpass.sh
 
-      - name: Shellcheck
+      - name: Install shellcheck
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          shellcheck scripts/*.sh mirror/entrypoint.sh
+          shellcheck --version
+
+      - name: Shellcheck
+        run: |
+          files=(scripts/*.sh mirror/entrypoint.sh)
+          echo "Checking: ${files[*]}"
+          shellcheck -f gcc "${files[@]}"
+          echo "shellcheck passed (${#files[@]} files)"
+          {
+            echo "### Shellcheck"
+            echo "Passed: \`${files[*]}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: mirror/Dockerfile
+          verbose: true
+
+      - name: Hadolint summary
+        run: |
+          echo "hadolint passed on mirror/Dockerfile"
+          {
+            echo "### Hadolint"
+            echo "Passed: \`mirror/Dockerfile\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Docker build
         run: docker build -f mirror/Dockerfile -t mirroring:ci ./mirror
