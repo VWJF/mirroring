@@ -25,7 +25,7 @@ Not mirrored: issues, pull requests / merge requests, branch protection, secrets
 
 The Action never runs `git push --mirror`. It only updates the **event’s ref**.
 
-This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `scripts/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`.
+This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `src/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`.
 
 ## Inputs
 

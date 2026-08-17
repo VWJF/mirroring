@@ -189,7 +189,7 @@ The Action prints GitLab’s message (with tokens redacted). Common causes: prot
 
 This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Prefer SemVer pins: `uses: VWJF/mirroring@v1` (moving major) or `uses: VWJF/mirroring@v1.2.3` (exact). SHA still works for bisect. Do not use `@main` as the production pin. Images published to GHCR on `vMAJOR.MINOR.PATCH` tags also get moving `vMAJOR` / `vMAJOR.MINOR` and `sha-…` tags; `latest` is not the recommended runtime pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
-Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `scripts/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
+Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `src/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
 
 Skip-actor and checkout stay on the runner (composite). Only the GitLab push (`mirror.sh` + `askpass.sh`) runs in the container, with `git`, `git-lfs`, `jq`, and `gh` pinned in the image rather than whatever the runner has. Self-hosted runners need Docker for that step. Credential handling is unchanged: process-scoped `GIT_ASKPASS` and `git -c`, no `~/.gitconfig`.
 

@@ -22,9 +22,9 @@ RUN apt-get update \
     && git lfs install --system \
     && rm -rf /var/lib/apt/lists/*
 
-COPY scripts/mirror.sh scripts/askpass.sh /opt/mirroring/scripts/
+COPY src/mirror.sh src/askpass.sh /opt/mirroring/src/
 COPY entrypoint.sh /opt/mirroring/entrypoint.sh
-RUN chmod +x /opt/mirroring/entrypoint.sh /opt/mirroring/scripts/mirror.sh /opt/mirroring/scripts/askpass.sh
+RUN chmod +x /opt/mirroring/entrypoint.sh /opt/mirroring/src/mirror.sh /opt/mirroring/src/askpass.sh
 
 ENV ACTION_PATH=/opt/mirroring
 

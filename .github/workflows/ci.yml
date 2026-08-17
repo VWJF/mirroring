@@ -10,10 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Check Docker copies match scripts/
+      - name: Check Docker copies match src/
         run: |
-          diff -q scripts/mirror.sh mirror/scripts/mirror.sh
-          diff -q scripts/askpass.sh mirror/scripts/askpass.sh
+          diff -q src/mirror.sh mirror/src/mirror.sh
+          diff -q src/askpass.sh mirror/src/askpass.sh
 
       - name: Install shellcheck
         run: |
@@ -23,7 +23,7 @@ jobs:
 
       - name: Shellcheck
         run: |
-          files=(scripts/*.sh mirror/entrypoint.sh)
+          files=(src/*.sh mirror/entrypoint.sh)
           echo "Checking: ${files[*]}"
           shellcheck -f gcc "${files[@]}"
           echo "shellcheck passed (${#files[@]} files)"
