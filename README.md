@@ -55,7 +55,7 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`). See [Caller example](#caller-example).
 2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
 
-   ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.png)
+   ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
 
 3. Set repository **variables** (Settings → Secrets and variables → Actions → Variables):
    - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`
@@ -64,7 +64,7 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
    - `KEEP_DIVERGENT_REFS` (`true`/`false`; Action default `true`)
    - `SKIP_GITHUB_ACTORS` — leave empty for standalone; for bidirectional, the dedicated GitHub username or `your-app[bot]` from step 5
 
-   ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
+   ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.jpeg)
 
 > [!WARNING]
 > The screenshot shows `KEEP_DIVERGENT_REFS=false` (overwrite GitLab). That can **lose commits**. For bidirectional use, set `KEEP_DIVERGENT_REFS=true`.
