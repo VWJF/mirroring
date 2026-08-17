@@ -5,7 +5,7 @@ Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) 
 - **Standalone:** GitHub → GitLab only. GitLab’s native mirror is not required.
 - **Bidirectional:** this Action plus GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
 
-Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`). Do not hardcode a destination in the Action.
+Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
 See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, and alerts.
 
@@ -58,7 +58,7 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
    ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
 
 3. Set repository **variables** (Settings → Secrets and variables → Actions → Variables):
-   - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`
+   - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`
    - `GITLAB_USERNAME` (optional; default `oauth2`)
    - `ONLY_PROTECTED_BRANCHES` (`true`/`false`; Action default `true`)
    - `KEEP_DIVERGENT_REFS` (`true`/`false`; Action default `true`)
@@ -204,4 +204,4 @@ The first checkout is optional if you rely on this Action’s inner checkout of 
 
 Remote tests (updates, GitLab knobs, then the other direction) are driven from your machine. The Action is not invoked locally; GitHub Actions and GitLab’s native push mirror are the systems under test. See [tests/README.md](tests/README.md) and run `./tests/run.sh`.
 
-[VWJF/temp-mirror](https://github.com/VWJF/temp-mirror) is a sample caller. Its destination is set via `vars.GITLAB_URL` (for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`).
+[VWJF/temp-mirror](https://github.com/VWJF/temp-mirror) is a sample caller. Its destination is set via `vars.GITLAB_URL` (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`).
