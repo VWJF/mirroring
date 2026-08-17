@@ -159,7 +159,7 @@ The Action prints GitLab’s message (with tokens redacted). Common causes: prot
 
 ### Where does the Action live?
 
-This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Setup and inputs are in [README.md](README.md). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
+This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
 Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `scripts/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
 
