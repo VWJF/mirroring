@@ -1,7 +1,7 @@
 name: Publish image
 
-# Image builder only. Does not create a git tag.
-# Operators: dispatch with `version` so GHCR exists before Bump image tags the Action.
+# Image builder only. Does not create a git tag or pin action.yml.
+# Operators: dispatch with `version` so GHCR exists before Bump image commits the pin.
 run-name: Publish image ${{ inputs.version || github.ref_name }}
 
 on:

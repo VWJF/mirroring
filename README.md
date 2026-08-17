@@ -210,11 +210,20 @@ The first checkout is optional if you rely on this Action’s inner checkout of 
 
 ## Publishing a release
 
-The GHCR image must exist **before** the git tag callers pin. Do not tag first. Do not retag an existing release.
+The GHCR image must exist **before** callers can use a docker-pinned Action. Do not retag an existing release. Bump is for **any** version (stable or pre-release); a `-` in the version (for example `-alpha`) only means you should pass `--prerelease` when you create the GitHub Release.
 
-1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag.
-2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This pins root `action.yml` to `uses: docker://ghcr.io/vwjf/mirroring:0.0.3-alpha`, commits, and creates the annotated git tag / GitHub Release (`--prerelease` when the version contains `-`).
-3. Callers pin `uses: VWJF/mirroring@0.0.3-alpha`.
+1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag or change `action.yml`.
+2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This pins root `action.yml` to `uses: docker://ghcr.io/vwjf/mirroring:0.0.3-alpha` and commits that file on the branch you ran on (`chore: pin mirror image to <version>`). It does **not** create a git tag or GitHub Release.
+3. **You** tag and create the GitHub Release (pre-release when the version contains `-`, e.g. `*-alpha`):
+
+```bash
+git pull
+git tag -a 0.0.3-alpha -m "0.0.3-alpha"
+git push origin 0.0.3-alpha
+gh release create 0.0.3-alpha --title 0.0.3-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.0.3-alpha." --prerelease
+```
+
+Omit `--prerelease` for a stable `x.y.z`. Callers then pin `uses: VWJF/mirroring@0.0.3-alpha`.
 
 From the CLI (needed until these workflows exist on the default branch):
 
@@ -222,9 +231,10 @@ From the CLI (needed until these workflows exist on the default branch):
 gh workflow run publish.yml --ref dockerize -f version=0.0.3-alpha
 # wait until Publish image is green
 gh workflow run bump-image.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Bump image is green (action.yml committed), then tag + gh release create as above
 ```
 
-Pushing a matching git tag still runs Publish image. Prefer dispatch when the image must exist before the Action tag.
+Pushing a matching git tag still runs Publish image. Prefer dispatch so the image exists before you tag the Action.
 
 ## Tests
 

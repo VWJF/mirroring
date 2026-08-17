@@ -1,7 +1,7 @@
 name: Bump image
 
-# Manifest bumper. Pins action.yml to a prebuilt GHCR image, then tags.
-# The image must already exist (run Publish image with this version first).
+# Pins action.yml to a prebuilt GHCR image and commits that file.
+# Does not create a git tag or GitHub Release — do those yourself after this is green.
 run-name: Bump image ${{ inputs.version }}
 
 on:
@@ -9,17 +9,12 @@ on:
     inputs:
       version:
         description: >
-          Version to pin and tag (e.g. 0.0.3-alpha). Leading v is stripped.
-          Canonical image tag matches Publish image: 0.0.3-alpha (not v-prefixed).
+          Version to pin in action.yml (e.g. 0.0.3-alpha or 1.0.0). Leading v is
+          stripped. Canonical image tag matches Publish image (no v-prefix).
+          Any version: a '-' only matters later, when you mark the GitHub Release
+          as a pre-release.
         required: true
         type: string
-      prerelease:
-        description: >
-          Mark the GitHub Release as a prerelease. Versions containing '-'
-          (alpha/rc) are always prereleases. Uncheck for a stable x.y.z.
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -33,9 +28,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Require a branch
         run: |
@@ -49,7 +41,6 @@ jobs:
         id: ver
         env:
           RAW: ${{ inputs.version }}
-          PRERELEASE_INPUT: ${{ inputs.prerelease }}
         run: |
           set -euo pipefail
           raw="${RAW#"${RAW%%[![:space:]]*}"}"
@@ -59,16 +50,10 @@ jobs:
             echo "::error::Invalid version '$raw' (expected semver, e.g. 0.0.3-alpha)"
             exit 1
           fi
-          repo="${GITHUB_REPOSITORY,,}"
-          image="ghcr.io/${repo}:${raw}"
-          prerelease=false
-          if [[ "$raw" == *-* || "$PRERELEASE_INPUT" == "true" ]]; then
-            prerelease=true
-          fi
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${raw}"
           {
             echo "version=$raw"
             echo "image=$image"
-            echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
           echo "Canonical image tag: $image"
 
@@ -78,25 +63,12 @@ jobs:
           IMAGE: ${{ steps.ver.outputs.image }}
         run: |
           set -euo pipefail
-          if grep -Fq "uses: docker://${IMAGE}" action.yml; then
+          if grep -E '^[[:space:]]+uses: docker://' action.yml | grep -Fq "docker://${IMAGE}"; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "already bumped"
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "action.yml is not pinned to docker://${IMAGE}"
-          fi
-
-      - name: Fail if git tag already exists
-        if: steps.pin.outputs.already != 'true'
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-          existing="$(git ls-remote --tags origin "refs/tags/${VERSION}" "refs/tags/v${VERSION}" || true)"
-          if [[ -n "$existing" ]]; then
-            echo "$existing"
-            echo "::error::Git tag ${VERSION} or v${VERSION} already exists on origin and would not match a new pin commit. Will not move tags."
-            exit 1
           fi
 
       - uses: docker/login-action@v3
@@ -117,33 +89,47 @@ jobs:
             exit 1
           fi
 
-      - name: Fail if action.yml has no mirror step to patch
-        if: steps.pin.outputs.already != 'true'
-        run: |
-          set -euo pipefail
-          if ! grep -Eq 'docker://|run-mirror-docker\.sh|mirroring/mirror@' action.yml; then
-            echo "::error::Working tree / action.yml has no mirror step to patch (expected docker://, run-mirror-docker.sh, or nested uses)."
-            exit 1
-          fi
-          if ! grep -qF -- '- name: Mirror ref to GitLab' action.yml; then
-            echo "::error::action.yml has no 'Mirror ref to GitLab' step to patch."
-            exit 1
-          fi
-
       - name: Pin Mirror ref step to GHCR image
         if: steps.pin.outputs.already != 'true'
         env:
           IMAGE: ${{ steps.ver.outputs.image }}
-        run: python3 scripts/pin-mirror-image.py --image "$IMAGE" --file action.yml
+        run: |
+          set -euo pipefail
+          uses="      uses: docker://${IMAGE}"
+          existing="$(grep -E '^[[:space:]]+uses: docker://' action.yml | awk '{print $2}' | head -1 || true)"
 
-      - name: Commit, push, tag, and release
+          if [[ -n "$existing" ]]; then
+            if [[ "$existing" != docker://${IMAGE%%:*}:* ]]; then
+              echo "::error::action.yml is pinned to ${existing}, not this repo's GHCR image. Will not overwrite it. Pass the version that matches the pin you want."
+              exit 1
+            fi
+            # Same image, different tag — replace only the uses line (version input is the new pin).
+            sed -i -E "s|^[[:space:]]+uses: docker://.*|${uses}|" action.yml
+          else
+            # Convert run-mirror-docker.sh → docker://. Keep skip-actor, checkout,
+            # and the commented runner-bash mirror.sh line.
+            tmp="$(mktemp)"
+            awk -v pin="$uses" '
+              /- name: Mirror ref to GitLab/ { in_mirror=1 }
+              in_mirror && /^      shell: bash$/ { next }
+              in_mirror && /run-mirror-docker\.sh/ { next }
+              in_mirror && /MIRROR_IMAGE_CONTEXT:/ { sub(/MIRROR_IMAGE_CONTEXT:.*/, "ACTION_PATH: /opt/mirroring") }
+              in_mirror && /if: steps.skip_actor.outputs.skip != '\''true'\''/ { print; print pin; next }
+              { print }
+            ' action.yml > "$tmp"
+            mv "$tmp" action.yml
+          fi
+
+          if ! grep -E '^[[:space:]]+uses: docker://' action.yml | grep -Fq "docker://${IMAGE}"; then
+            echo "::error::Failed to pin action.yml to docker://${IMAGE}"
+            exit 1
+          fi
+
+      - name: Commit and push action.yml
         if: steps.pin.outputs.already != 'true'
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          IMAGE: ${{ steps.ver.outputs.image }}
-          PRERELEASE: ${{ steps.ver.outputs.prerelease }}
           BRANCH: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -151,33 +137,12 @@ jobs:
 
           git add action.yml
           if git diff --cached --quiet; then
-            echo "::error::pin-mirror-image.py reported a change but action.yml has no diff"
+            echo "::error::Pin step reported a change but action.yml has no diff"
             exit 1
           fi
           git commit -m "chore: pin mirror image to ${VERSION}"
 
           if ! git push origin "HEAD:${BRANCH}"; then
-            echo "::error::Failed to push to ${BRANCH}. Branch protection may block GITHUB_TOKEN. Allow GitHub Actions to push, or use a PAT with contents:write. Do not force-push or skip hooks."
+            echo "::error::Failed to push to ${BRANCH}. Branch protection may block GITHUB_TOKEN. Allow GitHub Actions to push, or use a PAT with contents:write. Do not force-push or move tags."
             exit 1
           fi
-
-          if git ls-remote --tags origin "refs/tags/${VERSION}" "refs/tags/v${VERSION}" | grep -q .; then
-            echo "::error::Git tag ${VERSION} appeared on origin after the commit; will not move tags."
-            exit 1
-          fi
-
-          git tag -a "${VERSION}" -m "chore: pin mirror image to ${VERSION}"
-          if ! git push origin "refs/tags/${VERSION}"; then
-            echo "::error::Failed to push annotated tag ${VERSION}. Will not force-push tags."
-            exit 1
-          fi
-
-          release_args=(
-            release create "${VERSION}"
-            --title "${VERSION}"
-            --notes "Pins the composite Action to \`docker://${IMAGE}\`. Callers: \`uses: ${GITHUB_REPOSITORY}@${VERSION}\`."
-          )
-          if [[ "$PRERELEASE" == "true" ]]; then
-            release_args+=(--prerelease)
-          fi
-          gh "${release_args[@]}"
