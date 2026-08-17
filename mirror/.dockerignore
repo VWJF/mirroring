@@ -1,7 +1,0 @@
-# Keep the GitHub Docker Action build context tiny (context is this directory).
-.git
-.gitignore
-docs
-tests
-*.md
-**/*.md

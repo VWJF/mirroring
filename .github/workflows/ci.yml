@@ -10,11 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Check Docker copies match src/
-        run: |
-          diff -q src/mirror.sh mirror/src/mirror.sh
-          diff -q src/askpass.sh mirror/src/askpass.sh
-
       - name: Install shellcheck
         run: |
           sudo apt-get update
@@ -23,7 +18,7 @@ jobs:
 
       - name: Shellcheck
         run: |
-          files=(src/*.sh mirror/entrypoint.sh)
+          files=(src/*.sh entrypoint.sh)
           echo "Checking: ${files[*]}"
           shellcheck -f gcc "${files[@]}"
           echo "shellcheck passed (${#files[@]} files)"
@@ -35,16 +30,16 @@ jobs:
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: mirror/Dockerfile
+          dockerfile: Dockerfile
           verbose: true
 
       - name: Hadolint summary
         run: |
-          echo "hadolint passed on mirror/Dockerfile"
+          echo "hadolint passed on Dockerfile"
           {
             echo "### Hadolint"
-            echo "Passed: \`mirror/Dockerfile\`"
+            echo "Passed: \`Dockerfile\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Docker build
-        run: docker build -f mirror/Dockerfile -t mirroring:ci ./mirror
+        run: docker build -t mirroring:ci .

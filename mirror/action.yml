@@ -1,8 +1,0 @@
-name: Mirror ref to GitLab
-description: >
-  Run mirror.sh in a container with git, git-lfs, jq, and gh. Invoked by the
-  parent composite Action; not meant as the public entrypoint.
-
-runs:
-  using: docker
-  image: Dockerfile

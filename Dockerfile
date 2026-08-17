@@ -1,5 +1,5 @@
-# Build context is this directory (GitHub Docker Action) or `./mirror` in CI.
-#   docker build -f mirror/Dockerfile ./mirror
+# Build context is the repository root.
+#   docker build -t mirroring .
 FROM debian:bookworm-slim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
