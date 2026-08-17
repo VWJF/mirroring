@@ -7,7 +7,7 @@ Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) 
 
 Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/temp-mirror.git`). Do not hardcode a destination in the Action.
 
-See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, and recovery.
+See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, and alerts.
 
 ## What is mirrored
 
@@ -106,6 +106,30 @@ Recovery (manual; the Action does not merge for you):
 5. Close leftover PRs/MRs on the other platform. Do not merge the same feature independently on both sides.
 
 Squash/rebase merges are often **not** git-ancestors of the default branch, so a deleted GitHub feature branch may be **left** on GitLab (same as GitLab’s own push mirror).
+
+## Alerts
+
+GitLab and GitHub do **not** notify the same people. Bidirectional operators should expect GitLab to email maintainers, and should **subscribe on GitHub** if they want the Action’s failures too.
+
+### GitLab (native push mirror → GitHub)
+
+When a **remote (push) mirror update fails**, GitLab:
+
+- Shows a warning on the **project details** page (for example “Push mirroring failed … ago”) and an **Error** badge under **Settings → Repository → Mirroring repositories**. Hover the badge for the git error (auth, protected branch, divergent refs, and so on).
+- Emails **project Maintainers and Owners** once per failure streak (`remote_mirror_update_failed`). A later retry does **not** send another mail until the mirror succeeds again, then fails again.
+
+That includes **Keep divergent refs**: GitLab skips the diverged ref, marks the update **failed**, and uses the same UI + maintainer email. A different mail is sent if mirroring is **disabled because the mirror user was deleted**.
+
+This Action cannot change GitLab’s recipients. Project emails must be enabled; Maintainers who have disabled notifications for the project will not get the mail.
+
+### GitHub (this Action → GitLab)
+
+GitHub has **no** mirror-failure mail to all maintainers. A red workflow is only an Actions failure:
+
+- GitHub emails the **user who triggered** the run (the pusher), if that user has **Actions** notifications on.
+- Other Maintainers / Owners are **not** emailed unless they **watch** the repository and enable notifications for **Actions** / failed workflow runs (GitHub → Settings → Notifications, and the repo’s Watch menu). Watching “Releases only” or turning Actions off means they will miss a diverged-ref failure (`keep_divergent_refs: true` exits non-zero on purpose).
+
+To get the same “tell every maintainer” behavior as GitLab, each person must subscribe, or the caller workflow must add an extra `if: failure()` step (issue, Slack, and so on). This Action does not send that extra alert.
 
 ## Caller example
 

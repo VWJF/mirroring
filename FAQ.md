@@ -149,6 +149,12 @@ The Action does **not** write GitLab credentials (or a credential helper) to `~/
 
 The Action prints GitLab’s message (with tokens redacted). Common causes: protected branch does not allow the token user; missing LFS objects; file larger than GitHub’s limit; non-fast-forward with `keep_divergent_refs: true`.
 
+### Who gets emailed when a mirror fails?
+
+**GitLab’s native push mirror** (GitLab → GitHub): project **Maintainers and Owners** get one email when a remote mirror update fails, then silence until it succeeds and fails again. The project page also shows a mirroring-failed warning and an Error badge. Keep-divergent skips count as a failed update, so they use this path. (GitLab source: `NotificationService#remote_mirror_update_failed`; not currently spelled out in GitLab’s mirroring docs.)
+
+**This GitHub Action** (GitHub → GitLab): there is no equivalent “email all maintainers.” GitHub notifies the **pusher who triggered the workflow**, if they have Actions emails enabled. Other maintainers must **watch the repo** and turn on **Actions / failed workflow** notifications, or add a caller `if: failure()` alert. See [README.md § Alerts](README.md#alerts).
+
 ## Packaging
 
 ### Where does the Action live?
