@@ -80,7 +80,7 @@ The GitHub Actions **repository variables** and GitLab **Add new mirror reposito
 
 GitLab’s default is **not** to keep divergent refs: it **force-pushes** over diverged refs on GitHub. After the mirror exists, that checkbox can only be changed via the API. This Action’s default is the opposite (`keep_divergent_refs: true`). If you leave GitLab at default, GitHub history can disappear even when the Action would have failed closed.
 
-The screenshots below show the **dangerous** pairing (both overwrite): GitHub `KEEP_DIVERGENT_REFS=false` and GitLab **Keep divergent refs** unchecked. For bidirectional use, set **both** to keep divergent refs (`true` / checked).
+The GitHub screenshot below is the **dangerous** overwrite setting (`KEEP_DIVERGENT_REFS=false`). The GitLab screenshot shows **Keep divergent refs** checked — required for bidirectional use. Set **both** sides to keep divergent refs (`true` / checked). GitLab’s default is unchecked; after the mirror exists, that checkbox can only be changed via the API.
 
 ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
 
