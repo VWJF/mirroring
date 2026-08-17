@@ -1,7 +1,8 @@
 name: Bump image
 
-# Pins action.yml to a prebuilt GHCR image and commits that file.
-# Does not create a git tag or GitHub Release — do those yourself after this is green.
+# Retags the existing docker:// pin in action.yml to a published GHCR image
+# and commits that file. Does not convert bash/docker-build steps, create a
+# git tag, or create a GitHub Release — do those yourself after this is green.
 run-name: Bump image ${{ inputs.version }}
 
 on:
@@ -63,12 +64,18 @@ jobs:
           IMAGE: ${{ steps.ver.outputs.image }}
         run: |
           set -euo pipefail
-          if grep -E '^[[:space:]]+uses: docker://' action.yml | grep -Fq "docker://${IMAGE}"; then
+          pin="uses: docker://${IMAGE}"
+          prefix="uses: docker://${IMAGE%%:*}:"
+          if grep -Fq "$pin" action.yml; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "already bumped"
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "action.yml is not pinned to docker://${IMAGE}"
+            if grep -Fq "$prefix" action.yml; then
+              echo "action.yml has a docker:// pin; will retag to docker://${IMAGE}"
+            else
+              echo "action.yml has no ${prefix} pin"
+            fi
           fi
 
       - uses: docker/login-action@v3
@@ -89,39 +96,21 @@ jobs:
             exit 1
           fi
 
-      - name: Pin Mirror ref step to GHCR image
+      - name: Retag Mirror ref pin
         if: steps.pin.outputs.already != 'true'
         env:
           IMAGE: ${{ steps.ver.outputs.image }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          uses="      uses: docker://${IMAGE}"
-          existing="$(grep -E '^[[:space:]]+uses: docker://' action.yml | awk '{print $2}' | head -1 || true)"
-
-          if [[ -n "$existing" ]]; then
-            if [[ "$existing" != docker://${IMAGE%%:*}:* ]]; then
-              echo "::error::action.yml is pinned to ${existing}, not this repo's GHCR image. Will not overwrite it. Pass the version that matches the pin you want."
-              exit 1
-            fi
-            # Same image, different tag — replace only the uses line (version input is the new pin).
-            sed -i -E "s|^[[:space:]]+uses: docker://.*|${uses}|" action.yml
-          else
-            # Convert run-mirror-docker.sh → docker://. Keep skip-actor, checkout,
-            # and the commented runner-bash mirror.sh line.
-            tmp="$(mktemp)"
-            awk -v pin="$uses" '
-              /- name: Mirror ref to GitLab/ { in_mirror=1 }
-              in_mirror && /^      shell: bash$/ { next }
-              in_mirror && /run-mirror-docker\.sh/ { next }
-              in_mirror && /MIRROR_IMAGE_CONTEXT:/ { sub(/MIRROR_IMAGE_CONTEXT:.*/, "ACTION_PATH: /opt/mirroring") }
-              in_mirror && /if: steps.skip_actor.outputs.skip != '\''true'\''/ { print; print pin; next }
-              { print }
-            ' action.yml > "$tmp"
-            mv "$tmp" action.yml
+          prefix="uses: docker://${IMAGE%%:*}:"
+          if ! grep -Fq "$prefix" action.yml; then
+            echo "::error::action.yml has no ${prefix} pin. Bump only retags an existing docker:// pin; it does not convert a bash or docker-build step. Pin the Mirror ref step to docker://${IMAGE%%:*}:<tag> first."
+            exit 1
           fi
-
-          if ! grep -E '^[[:space:]]+uses: docker://' action.yml | grep -Fq "docker://${IMAGE}"; then
-            echo "::error::Failed to pin action.yml to docker://${IMAGE}"
+          sed -i -E "s|(uses: docker://${IMAGE%%:*}:)[^[:space:]]+|\\1${VERSION}|" action.yml
+          if ! grep -Fq "uses: docker://${IMAGE}" action.yml; then
+            echo "::error::Failed to retag action.yml to docker://${IMAGE}"
             exit 1
           fi
 
@@ -137,7 +126,7 @@ jobs:
 
           git add action.yml
           if git diff --cached --quiet; then
-            echo "::error::Pin step reported a change but action.yml has no diff"
+            echo "::error::Retag step reported a change but action.yml has no diff"
             exit 1
           fi
           git commit -m "chore: pin mirror image to ${VERSION}"

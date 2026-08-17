@@ -68,9 +68,6 @@ runs:
 
     # Nested uses: VWJF/mirroring/mirror@${{ github.action_ref }} is invalid:
     # composite action.yml cannot use the github context in `uses`.
-    # Bump image pins `uses: docker://ghcr.io/vwjf/mirroring:<tag>` after Publish
-    # image has pushed that tag. Until then, build from action_path.
-
     # Runner-bash invocation of scripts/mirror.sh (scripts/*.sh are not deprecated).
     # The Docker and bash invocation steps are side-to-side, not replacement.
     - name: Mirror ref to GitLab
