@@ -63,8 +63,8 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 
    ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
 
-   > [!WARNING]
-   > The screenshot shows `KEEP_DIVERGENT_REFS=false` (overwrite GitLab). That can **lose commits**. For bidirectional use, set `KEEP_DIVERGENT_REFS=true`.
+> [!WARNING]
+> The screenshot shows `KEEP_DIVERGENT_REFS=false` (overwrite GitLab). That can **lose commits**. For bidirectional use, set `KEEP_DIVERGENT_REFS=true`.
 
 4. Protect the GitHub branches you want mirrored. You will match this list on GitLab. Do not rewrite mirrored history.
 
@@ -72,8 +72,8 @@ Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are
 
    ![GitHub PAT repository permissions: Metadata read, Contents (code) read and write](docs/github-pat-permissions.png)
 
-   > [!TIP]
-   > Loop safety is this skip list **and** a no-op if GitLab already has the same SHA (`git ls-remote`). You still need `SKIP_GITHUB_ACTORS` so GitLab’s push back to GitHub does not retrigger the Action in a loop.
+> [!TIP]
+> Loop safety is this skip list **and** a no-op if GitLab already has the same SHA (`git ls-remote`). You still need `SKIP_GITHUB_ACTORS` so GitLab’s push back to GitHub does not retrigger the Action in a loop.
 
 6. **Bidirectional only:** watch this repository and enable **Actions / failed workflow** notifications if you want maintainer alerts. GitHub emails the pusher by default, not every maintainer. See [Alerts](#alerts).
 
@@ -85,8 +85,8 @@ Do this after the GitHub variables and (for bidirectional) the dedicated PAT exi
 
    ![GitLab project access token: role Maintainer, scopes api / read_repository / write_repository](docs/gitlab-project-access-token.jpeg)
 
-   > [!WARNING]
-   > **Developer** cannot push GitLab’s default protected `main` (`You are not allowed to push code to protected branches`). The token must be **allowed to push** that branch. You do **not** need to unprotect `main`. Leave “Allowed to force push” off unless `KEEP_DIVERGENT_REFS` is `false`.
+> [!WARNING]
+> **Developer** cannot push GitLab’s default protected `main` (`You are not allowed to push code to protected branches`). The token must be **allowed to push** that branch. You do **not** need to unprotect `main`. Leave “Allowed to force push” off unless `KEEP_DIVERGENT_REFS` is `false`.
 
 2. Protect the same branches as on GitHub (including `main`). Keep the two lists in sync.
 
@@ -96,8 +96,8 @@ Do this after the GitHub variables and (for bidirectional) the dedicated PAT exi
 
    ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.jpeg)
 
-   > [!CAUTION]
-   > GitLab’s default is **Keep divergent refs** **unchecked**: it **force-pushes** over diverged refs on GitHub. This Action cannot override that checkbox. After the mirror exists, the setting can only be changed via the API. If you leave the default, GitHub history can disappear even when the Action would have failed closed.
+> [!CAUTION]
+> GitLab’s default is **Keep divergent refs** **unchecked**: it **force-pushes** over diverged refs on GitHub. This Action cannot override that checkbox. After the mirror exists, the setting can only be changed via the API. If you leave the default, GitHub history can disappear even when the Action would have failed closed.
 
    Fill in:
    - Direction: **Push**
