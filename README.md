@@ -38,7 +38,7 @@ GitLab’s native default for keep-divergent is **overwrite** (`false`). This Ac
 1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`).
 2. Add repository secret `GITLAB_TOKEN` (GitLab PAT / project token with `write_repository`). GitLab **protected** `main` does **not** need to be unprotected: the token must be **allowed to push** that branch. A project access token with role **Developer** is not enough — GitLab only lets **Maintainers** (or whoever is listed under Allowed to push) update protected branches. Use role **Maintainer**. Typical scopes: `api`, `read_repository`, `write_repository`. Leave “Allowed to force push” off unless `keep_divergent_refs` is `false`. Unprotecting `main` is a shortcut, not a requirement.
 
-   ![GitLab project access token: role Maintainer, scopes api / read_repository / write_repository](docs/gitlab-project-access-token.png)
+   ![GitLab project access token: role Maintainer, scopes api / read_repository / write_repository](docs/gitlab-project-access-token.jpeg)
 
 3. Set repository variable `GITLAB_URL` (HTTPS clone URL). Optionally:
    - `GITLAB_USERNAME` (default `oauth2`)
@@ -80,11 +80,11 @@ The GitHub Actions **repository variables** and GitLab **Add new mirror reposito
 
 GitLab’s default is **not** to keep divergent refs: it **force-pushes** over diverged refs on GitHub. After the mirror exists, that checkbox can only be changed via the API. This Action’s default is the opposite (`keep_divergent_refs: true`). If you leave GitLab at default, GitHub history can disappear even when the Action would have failed closed.
 
-The screenshots below show the **dangerous** pairing (both overwrite): GitHub `KEEP_DIVERGENT_REFS=false` and GitLab **Keep divergent refs** unchecked. For bidirectional use, set **both** to keep divergent refs (`true` / checked).
+The GitHub screenshot below is the **dangerous** overwrite setting (`KEEP_DIVERGENT_REFS=false`). The GitLab screenshot shows **Keep divergent refs** checked — required for bidirectional use. Set **both** sides to keep divergent refs (`true` / checked). GitLab’s default is unchecked; after the mirror exists, that checkbox can only be changed via the API.
 
 ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
 
-![GitLab Add new mirror repository: Keep divergent refs unchecked by default](docs/gitlab-push-mirror.png)
+![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.jpeg)
 
 Loop safety is both:
 
