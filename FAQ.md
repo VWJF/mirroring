@@ -10,6 +10,34 @@ GitLab **pull** mirroring (and therefore native bidirectional mirroring) is Prem
 
 **Choice:** compose GitLab’s native push mirror (GitLab → GitHub) with this GitHub Action (GitHub → GitLab). Do not use GitLab native pull/bidirectional.
 
+### Why not SvanBoxel or pixta’s mirroring Actions?
+
+They solve a **different problem**: one-way “copy git objects to another remote.” This Action **emulates GitLab push-mirror** so it can sit next to GitLab’s native GitLab → GitHub mirror without overwriting or pruning history.
+
+**[SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action)** pushes the current GitHub branch to GitLab so GitLab CI runs, then **polls until CI finishes** and posts a GitHub commit status. The GitHub job stays up for the whole GitLab pipeline (billed minutes). Mirroring is a vehicle for CI, not a bidirectional git sync.
+
+- **Pros:** GitLab pipeline traces in the Action log; GitHub commit status (`gitlab-ci` context); one-branch push (not a full-repo `--mirror`); default is fast-forward; optional `--tags`.
+- **Cons / shortcomings:** No `keep_divergent_refs`, no protected-branch filter, no actor skip, no live `ls-remote` no-op, no ancestry-based branch delete, no tag-prune policy (it simply never prunes). `FORCE_PUSH` is a blunt env flag. Writes `git config --global` plus `credential.helper cache` (creds can linger on self-hosted runners). Docker Action; typically consumed as `@master`. Does not wait-report if you only wanted git sync.
+
+**[pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action)** is a generic full-repo copy (GitHub → GitLab / Bitbucket / CodeCommit). It force-pushes **all** branches and tags and **prunes** destination refs missing on the source (`git push --tags --force --prune …`).
+
+- **Pros:** Makes the destination identical in one shot; SSH; works for remotes other than GitLab; Docker isolates the SSH key on the container.
+- **Cons / shortcomings:** Closer to `git push --mirror` than GitLab push-mirror. Unmerged destination-only branches are deleted. Diverged tips are overwritten. Unsafe next to GitLab’s native push mirror (a GitLab→GitHub push would retrigger it and it would force+prune GitLab back to GitHub’s full ref set). SSH only (`StrictHostKeyChecking=no`). Old Alpine image. No GitLab knobs, no loop guards.
+
+**This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Composite bash (no Docker); HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
+
+| | SvanBoxel | pixta | This Action |
+| --- | --- | --- | --- |
+| Purpose | GitHub as CI frontend for GitLab | Force+prune replica | GitLab push-mirror counterpart |
+| What is pushed | One branch | All branches + tags | The triggering ref |
+| Divergence | FF, or `FORCE_PUSH` | Always force | `keep_divergent_refs` |
+| Destination-only refs | Left | Pruned | Left, or merged-branch delete |
+| Bidirectional / loop guard | No | No (would overwrite) | Actor skip + SHA no-op |
+| Transport | HTTPS + PAT | SSH key | HTTPS + PAT |
+| Packaging | Docker | Docker | Composite |
+
+**Choice:** do not use those Actions as the GitHub half of a GitLab native push-mirror pair. Use SvanBoxel if you need GitLab CI status back on GitHub. Use pixta if the destination is a disposable copy you are willing to force-update and prune.
+
 ### Does the Action work without GitLab’s native mirror?
 
 **Yes.** Used alone it is a GitHub → GitLab **push mirror** with the same deletion rules and knobs as GitLab (`only_protected_branches`, `keep_divergent_refs`, merged-branch delete, no tag prune). Bidirectional is optional: turn on GitLab’s native push mirror and `skip_github_actors` when you want the other direction.

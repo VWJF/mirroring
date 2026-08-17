@@ -7,7 +7,7 @@ Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) 
 
 Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
-See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, and alerts.
+See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
 ## What is mirrored
 
