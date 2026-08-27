@@ -1,6 +1,6 @@
 # FAQ: GitHub → GitLab push-mirror Action
 
-For operators of a GitHub↔GitLab pair. This records the design questions, the choices we made, and what to do in production.
+For operators of a GitHub↔GitLab pair. This records the design questions, the choices we made, and what to do in production. **Mirroring copies git history to another server;** read [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees) before you enable it.
 
 ## What this is
 
@@ -44,7 +44,17 @@ They solve a **different problem**: one-way “copy git objects to another remot
 
 ### Must GitHub be public and GitLab private?
 
-**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you need the protection APIs).
+**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you need the protection APIs). Changing visibility after mirroring does **not** unsay data already copied. See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
+
+### Does mirroring keep the source’s security and privacy guarantees?
+
+**No.** This Action (GitHub → GitLab) and GitLab’s native push mirror (GitLab → GitHub) **copy git objects onto another Git server**. Examples: self-hosted GitLab → public GitHub, GitHub Enterprise (`github.sfu.ca`) → public GitLab, private → public, on-prem → cloud.
+
+A one-way mirror is still an **export**. After a successful push, that history lives under the destination’s access control, logging, backups, legal process, and terms of service. The Action does not redact files, skip secrets in old commits, or enforce that both remotes have the same visibility.
+
+**You** must decide that the destination is allowed to hold this data and must exercise due care (policy, privacy, export control, and who can clone either remote). **The authors of this Action are not responsible or liable** for how it is used or for data that leaves the source.
+
+Every Action run emits a GitHub **warning** with the same point. That notice is not a consent dialog and does not block the job.
 
 ## What is mirrored
 
@@ -62,7 +72,7 @@ GitLab Free push-mirror’s closest control is **Only mirror protected branches*
 
 ### If GitHub is public, does GitLab history become public?
 
-If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the pair.
+If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the pair. The same applies in reverse (public GitLab, private GitHub). See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
 ## Knobs (match GitLab)
 
@@ -167,11 +177,26 @@ Rejected for v1. Auto-merge is not GitLab push-mirror behavior and can create un
 
 - **GitLab (`gitlab_token`):** `write_repository`. The token must be allowed to push protected branches (and delete them if you prune merged branches). **Developer is not enough** for GitLab’s default protected `main`: that list is Maintainers only, so you get `You are not allowed to push code to protected branches`. Use a project/personal token with role **Maintainer**, or add Developers to Allowed to push. You do not need to unprotect `main`. “Allowed to force push” is separate; leave it off when `keep_divergent_refs` is `true` (fast-forward only).
 - **GitHub (`github_token`):** clone if the source is private; read branches/rulesets for `only_protected_branches`. Fine-grained: Contents read; add more if the protection APIs return 403.
-- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with **Metadata: read** and **Contents (code): read/write**, and Workflows write if `.github/workflows` exists.
+- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with **Metadata: read** and **Contents (code): read/write**. Also grant **Workflows** (`workflow` on a classic PAT, or Workflows read/write on a fine-grained token) whenever the repo has a `.github/workflows/` directory — including non-YAML files. See the next question.
 
 Use **HTTPS**. GitLab cannot push LFS over SSH. Both remotes must use the same object format. GitHub’s 100 MB / LFS limits still apply when GitLab is the destination.
 
 The Action does **not** write GitLab credentials (or a credential helper) to `~/.gitconfig` or `~/.git-credentials`. Auth is only `GIT_ASKPASS` plus per-process `git -c` flags, then those env vars are unset when the script exits. The same path is safe on GitHub-hosted and reused self-hosted runners.
+
+### GitLab’s push to GitHub was rejected: PAT needs `workflow` scope
+
+GitLab’s native **push** mirror (GitLab → GitHub, including GitHub Enterprise such as `github.sfu.ca`) uses the GitHub PAT you paste into GitLab as git HTTPS credentials. **Contents** and **Metadata** are not enough if the tree contains `.github/workflows/`.
+
+GitHub refuses that push with:
+
+```text
+! [remote rejected] main -> main (refusing to allow a Personal Access Token
+to create or update workflow `.github/workflows/README.md` without `workflow` scope)
+```
+
+That check is the **path**, not the file type. A `README.md` under `.github/workflows/` counts as “updating a workflow.” GitLab then reports `13:push to mirror: git push: exit status 1` and lists every ref that hit the same rejection.
+
+**Fix:** add **`workflow`** on a classic PAT, or **Workflows: read/write** on a fine-grained token, then **Update now** on the GitLab mirror. This is required whenever `.github/workflows/` exists on the mirrored tree (this pair keeps the caller workflow in git on both remotes). github.com and GitHub Enterprise behave the same.
 
 ### Why did the job fail with a GitLab rejection?
 

@@ -44,6 +44,10 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Warn that git data leaves this server
+      shell: bash
+      run: bash "${{ github.action_path }}/src/warn-data-movement.sh"
+
     - name: Skip configured GitHub actors
       id: skip_actor
       shell: bash

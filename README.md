@@ -5,6 +5,13 @@ Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **pus
 - **Standalone:** GitHub → GitLab only. GitLab’s native mirror is not required.
 - **Bidirectional:** this Action plus GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
 
+> [!WARNING]
+> **This copies git data to another server.** Each successful run sends commits, trees, and the triggering ref from GitHub to GitLab (and, if you enable GitLab’s native push mirror, the other way too). After that copy exists, it is **not** protected only by the source host’s access control, retention, residency, or terms.
+>
+> Typical mismatches: **private ↔ public**, **self-hosted ↔ cloud** (for example self-hosted GitLab → public GitHub, or GitHub Enterprise → public GitLab), and different organizational policies on each side. One-way mirroring does not keep the data “inside” the original space.
+>
+> **You** must confirm the destination is allowed to hold this history (including secrets accidentally committed). **Due care is yours.** The authors of this Action are **not responsible or liable** for its use or for data that leaves the source. Each job also prints this as an Actions **warning**. See [FAQ — Data movement, privacy, and liability](FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
+
 Pin a SemVer tag, not `@main`:
 
 - `uses: VWJF/mirroring@v1` — moving major (receives patches)
@@ -15,7 +22,7 @@ The first release of this packaging is `v1.0.0`. Self-hosted runners need Docker
 
 Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
-See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
+See [FAQ.md](FAQ.md) for data-movement / liability, design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
 ## What is mirrored
 
@@ -45,6 +52,9 @@ This Action lives in its own repository, so `actions/checkout` of the **source**
 ## Setup
 
 Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are independent and one side cannot change the other.
+
+> [!CAUTION]
+> Enabling this workflow (and GitLab’s native push mirror, if you use it) **moves git history between systems**. Treat destination visibility, token scope, and “who can clone the other remote” as a governance decision, not only a sync setting. The Action will warn on every run; that warning does not replace your review.
 
 | Policy | GitHub variable | GitLab mirror checkbox |
 | --- | --- | --- |
