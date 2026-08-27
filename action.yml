@@ -75,7 +75,7 @@ runs:
     # kept commented beside it (src/*.sh are not deprecated).
     - name: Mirror ref to GitLab
       if: steps.skip_actor.outputs.skip != 'true'
-      uses: docker://ghcr.io/vwjf/mirroring:0.0.3-alpha
+      uses: docker://ghcr.io/vwjf/mirroring:0.0.4-alpha
       # shell: bash
       env:
         GITLAB_URL: ${{ inputs.gitlab_url }}
