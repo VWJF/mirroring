@@ -16,8 +16,9 @@ data, and must exercise due care (visibility, secrets in git history, policy,
 and law). The authors of this Action are not responsible or liable for how it
 is used or for data that leaves the source as a result.
 
-See README.md (Warning and disclaimer) and FAQ.md.
+See https://github.com/VWJF/mirroring/blob/dockerize/README.md
+and https://github.com/VWJF/mirroring/blob/dockerize/FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees
 EOF
 
 # Annotation appears on the job in the Actions UI (one line; no newlines).
-echo "::warning title=Git data leaves this server::This Action copies commits to another Git host. Access control, privacy, and law on the destination may differ from the source. You are responsible for that copy. The Action authors are not liable. See VWJF/mirroring README and FAQ."
+echo "::warning title=Git data leaves this server::This Action copies commits to another Git host. Access control, privacy, and law on the destination may differ from the source. You are responsible for that copy. The Action authors are not liable. See https://github.com/VWJF/mirroring/blob/dockerize/README.md and https://github.com/VWJF/mirroring/blob/dockerize/FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees"

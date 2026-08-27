@@ -177,7 +177,7 @@ Rejected for v1. Auto-merge is not GitLab push-mirror behavior and can create un
 
 - **GitLab (`gitlab_token`):** `write_repository`. The token must be allowed to push protected branches (and delete them if you prune merged branches). **Developer is not enough** for GitLab’s default protected `main`: that list is Maintainers only, so you get `You are not allowed to push code to protected branches`. Use a project/personal token with role **Maintainer**, or add Developers to Allowed to push. You do not need to unprotect `main`. “Allowed to force push” is separate; leave it off when `keep_divergent_refs` is `true` (fast-forward only).
 - **GitHub (`github_token`):** clone if the source is private; read branches/rulesets for `only_protected_branches`. Fine-grained: Contents read; add more if the protection APIs return 403.
-- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with **Metadata: read** and **Contents (code): read/write**. Also grant **Workflows** (`workflow` on a classic PAT, or Workflows read/write on a fine-grained token) whenever the repo has a `.github/workflows/` directory — including non-YAML files. See the next question.
+- **GitLab’s native mirror toward GitHub:** PAT or fine-grained token with **Metadata: read** and **Contents (code): read/write**, and Workflows write if `.github/workflows` exists.
 
 Use **HTTPS**. GitLab cannot push LFS over SSH. Both remotes must use the same object format. GitHub’s 100 MB / LFS limits still apply when GitLab is the destination.
 
