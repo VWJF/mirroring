@@ -1,6 +1,6 @@
 # FAQ: GitHub → GitLab push-mirror Action
 
-For operators of a GitHub↔GitLab pair. This records the design questions, the choices we made, and what to do in production.
+For operators of a GitHub↔GitLab pair. This records the design questions, the choices we made, and what to do in production. **Mirroring copies git history to another server;** read [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees) before you enable it.
 
 ## What this is
 
@@ -24,7 +24,7 @@ They solve a **different problem**: one-way “copy git objects to another remot
 - **Pros:** Makes the destination identical in one shot; SSH; works for remotes other than GitLab; Docker isolates the SSH key on the container.
 - **Cons / shortcomings:** Closer to `git push --mirror` than GitLab push-mirror. Unmerged destination-only branches are deleted. Diverged tips are overwritten. Unsafe next to GitLab’s native push mirror (a GitLab→GitHub push would retrigger it and it would force+prune GitLab back to GitHub’s full ref set). SSH only (`StrictHostKeyChecking=no`). Old Alpine image. No GitLab knobs, no loop guards.
 
-**This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Composite bash (no Docker); HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
+**This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Hybrid packaging: composite skip-actor + checkout on the runner; `mirror.sh` in Docker. HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
 
 | | SvanBoxel | pixta | This Action |
 | --- | --- | --- | --- |
@@ -34,7 +34,7 @@ They solve a **different problem**: one-way “copy git objects to another remot
 | Destination-only refs | Left | Pruned | Left, or merged-branch delete |
 | Bidirectional / loop guard | No | No (would overwrite) | Actor skip + SHA no-op |
 | Transport | HTTPS + PAT | SSH key | HTTPS + PAT |
-| Packaging | Docker | Docker | Composite |
+| Packaging | Docker | Docker | Hybrid (composite + Docker `mirror.sh`) |
 
 **Choice:** do not use those Actions as the GitHub half of a GitLab native push-mirror pair. Use SvanBoxel if you need GitLab CI status back on GitHub. Use pixta if the destination is a disposable copy you are willing to force-update and prune.
 
@@ -44,7 +44,17 @@ They solve a **different problem**: one-way “copy git objects to another remot
 
 ### Must GitHub be public and GitLab private?
 
-**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you need the protection APIs).
+**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you need the protection APIs). Changing visibility after mirroring does **not** unsay data already copied. See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
+
+### Does mirroring keep the source’s security and privacy guarantees?
+
+**No.** This Action (GitHub → GitLab) and GitLab’s native push mirror (GitLab → GitHub) **copy git objects onto another Git server**. Examples: self-hosted GitLab → public GitHub, GitHub Enterprise (`github.sfu.ca`) → public GitLab, private → public, on-prem → cloud.
+
+A one-way mirror is still an **export**. After a successful push, that history lives under the destination’s access control, logging, backups, legal process, and terms of service. The Action does not redact files, skip secrets in old commits, or enforce that both remotes have the same visibility.
+
+**You** must decide that the destination is allowed to hold this data and must exercise due care (policy, privacy, export control, and who can clone either remote). **The authors of this Action are not responsible or liable** for how it is used or for data that leaves the source.
+
+Every Action run emits a GitHub **warning** with the same point. That notice is not a consent dialog and does not block the job.
 
 ## What is mirrored
 
@@ -62,7 +72,7 @@ GitLab Free push-mirror’s closest control is **Only mirror protected branches*
 
 ### If GitHub is public, does GitLab history become public?
 
-If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the pair.
+If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the pair. The same applies in reverse (public GitLab, private GitHub). See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
 ## Knobs (match GitLab)
 
@@ -173,6 +183,21 @@ Use **HTTPS**. GitLab cannot push LFS over SSH. Both remotes must use the same o
 
 The Action does **not** write GitLab credentials (or a credential helper) to `~/.gitconfig` or `~/.git-credentials`. Auth is only `GIT_ASKPASS` plus per-process `git -c` flags, then those env vars are unset when the script exits. The same path is safe on GitHub-hosted and reused self-hosted runners.
 
+### GitLab’s push to GitHub was rejected: PAT needs `workflow` scope
+
+GitLab’s native **push** mirror (GitLab → GitHub, including GitHub Enterprise such as `github.sfu.ca`) uses the GitHub PAT you paste into GitLab as git HTTPS credentials. **Contents** and **Metadata** are not enough if the tree contains `.github/workflows/`.
+
+GitHub refuses that push with:
+
+```text
+! [remote rejected] main -> main (refusing to allow a Personal Access Token
+to create or update workflow `.github/workflows/README.md` without `workflow` scope)
+```
+
+That check is the **path**, not the file type. A `README.md` under `.github/workflows/` counts as “updating a workflow.” GitLab then reports `13:push to mirror: git push: exit status 1` and lists every ref that hit the same rejection.
+
+**Fix:** add **`workflow`** on a classic PAT, or **Workflows: read/write** on a fine-grained token, then **Update now** on the GitLab mirror. This is required whenever `.github/workflows/` exists on the mirrored tree (this pair keeps the caller workflow in git on both remotes). github.com and GitHub Enterprise behave the same.
+
 ### Why did the job fail with a GitLab rejection?
 
 The Action prints GitLab’s message (with tokens redacted). Common causes: protected branch does not allow the token user; missing LFS objects; file larger than GitHub’s limit; non-fast-forward with `keep_divergent_refs: true`.
@@ -187,9 +212,11 @@ The Action prints GitLab’s message (with tokens redacted). Common causes: prot
 
 ### Where does the Action live?
 
-This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
+This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Prefer SemVer pins: `uses: VWJF/mirroring@v1` (moving major) or `uses: VWJF/mirroring@v1.2.3` (exact). SHA still works for bisect. Do not use `@main` as the production pin. Images published to GHCR on `vMAJOR.MINOR.PATCH` tags also get moving `vMAJOR` / `vMAJOR.MINOR` and `sha-…` tags; `latest` is not the recommended runtime pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
-Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `scripts/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
+Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `src/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
+
+Skip-actor and checkout stay on the runner (composite). Only the GitLab push (`mirror.sh` + `askpass.sh`) runs in the container, with `git`, `git-lfs`, `jq`, and `gh` pinned in the image rather than whatever the runner has. The image is built from the repo-root `Dockerfile` (context `.`); it copies those same `src/` scripts. Self-hosted runners need Docker for that step. Credential handling is unchanged: process-scoped `GIT_ASKPASS` and `git -c`, no `~/.gitconfig`.
 
 ### Can the manual mirror tests be automated?
 

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck --version
+
+      - name: Shellcheck
+        run: |
+          files=(src/*.sh entrypoint.sh)
+          echo "Checking: ${files[*]}"
+          shellcheck -f gcc "${files[@]}"
+          echo "shellcheck passed (${#files[@]} files)"
+          {
+            echo "### Shellcheck"
+            echo "Passed: \`${files[*]}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          verbose: true
+
+      - name: Hadolint summary
+        run: |
+          echo "hadolint passed on Dockerfile"
+          {
+            echo "### Hadolint"
+            echo "Passed: \`Dockerfile\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Docker build
+        run: docker build -t mirroring:ci .
