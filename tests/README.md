@@ -2,7 +2,7 @@
 
 These tests do **not** run `mirror.sh` on your laptop. A local driver mutates remotes and asserts; GitHub Actions (and GitLab native push mirror) remain the systems under test.
 
-They prove **updates** first, then the **GitLab knobs**, then the **other direction**. Creating a disposable GitHub branch and seeing GitLab catch up is only the happy path: that create is **setup for test 1**, not its own numbered test.
+They prove **updates** first, then the **GitLab options**, then the **other direction**. Creating a disposable GitHub branch and seeing GitLab catch up is only the happy path: that create is **setup for test 1**, not its own numbered test.
 
 The harness is two files: [`run.sh`](run.sh) (the seven tests) and [`helpers.sh`](helpers.sh) (`gh` / `glab` login, git, wait for Actions). Public vs private does not change the command.
 
