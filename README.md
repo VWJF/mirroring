@@ -51,7 +51,7 @@ The Action never runs `git push --mirror`. It only updates the **event’s ref**
 
 ## Setup
 
-Create **credentials** first, then **configure GitHub Actions**, then **configure GitLab push mirroring**. You will set the same policy twice: they are independent and one side cannot change the other.
+Create **credentials** first, then **configure GitHub Actions** (optionally **configure the GitLab repository**), then **configure GitLab push mirroring**. You will set the same policy twice: they are independent and one side cannot change the other.
 
 > [!CAUTION]
 > Enabling this workflow (and GitLab’s native push mirror, if you use it) **moves git history between systems**. Treat destination visibility, token scope, and “who can clone the other remote” as a governance decision, not only a sync setting. The Action will warn on every run; that warning does not replace your review.
@@ -66,7 +66,7 @@ Create **credentials** first, then **configure GitHub Actions**, then **configur
 > **Standalone** is GitHub → GitLab only (this Action). **Bidirectional** adds GitLab’s native **push** mirror (GitLab → GitHub). GitHub → GitLab is near-immediate. GitLab → GitHub is Sidekiq: within about five minutes, or about one minute if only protected branches are mirrored. Do not delay this Action to “match” GitLab; it compares **live GitLab** with `git ls-remote`.
 
 > [!TIP]
-> For standalone, skip [Configure GitLab push mirroring](#configure-gitlab-push-mirroring). That section is GitLab’s native GitLab → GitHub push sync.
+> For standalone, skip [Configure GitLab push mirroring](#configure-gitlab-push-mirroring) which sets up the GitLab’s native push mirror.
 
 ### Credentials
 
@@ -127,6 +127,14 @@ Create **credentials** first, then **configure GitHub Actions**, then **configur
 
    <img src="docs/github-watch-repo.png" alt="GitHub repository Watch control" width="120">
 
+#### Configure the GitLab repository
+
+These are project settings, not strictly required for the mirroring.
+
+1. **Settings → Repository → Branch defaults** — use the same default branch as GitHub (merged-branch delete uses GitLab’s default).
+2. **Settings → Repository → Branch rules** — protect the same branches as on GitHub (including `main`). Keep the two lists in sync.
+3. **Settings → Repository → Protected branches → Add Protected Branch**
+
 ### Configure GitLab push mirroring
 
 Do this after the GitHub variables and the dedicated PAT exist.
@@ -149,9 +157,6 @@ Do this after the GitHub variables and the dedicated PAT exist.
 
 > [!NOTE]
 > Use **HTTPS** for GitLab clone/mirror URLs. GitLab push mirroring does not sync LFS over SSH. Both remotes must use the same object format (SHA-1 vs SHA-256). The Action never writes a credential helper or token to the runner’s `~/.gitconfig` (GitHub-hosted and self-hosted runners).
-
-> [!NOTE]
-> Protect the same branches as on GitHub (including `main`). Keep the two lists in sync. Settings → Repository → Protected branches → Add Protected Branch
 
 ### After a divergence
 
