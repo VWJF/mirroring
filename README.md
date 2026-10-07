@@ -1,13 +1,18 @@
 # GitHub → GitLab push-mirror Action
 
-Reusable composite Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same knobs and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/).
+Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **push-mirrors a GitHub ref to GitLab**, using the same options and deletion rules as [GitLab push mirroring](https://docs.gitlab.com/user/project/repository/mirror/push/). Depending on the configuration of the target repo, it can be used in two modes:
 
 - **Standalone:** GitHub → GitLab only. GitLab’s native mirror is not required.
-- **Bidirectional:** this Action plus GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
+- **Bidirectional:** this Action combined with GitLab’s native push mirror (GitLab → GitHub). Native GitLab pull/bidirectional mirroring is not used.
 
-Callers use `uses: VWJF/mirroring@main` (or a tag/SHA). Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
+> [!WARNING]
+> **This copies git data to another server.** Each successful run sends commits, trees, and the triggering ref from GitHub to GitLab (and, if you enable GitLab’s native push mirror, the other way too). After that copy exists, it is **not** protected only by the source host’s access control, retention, residency, or terms anymore.
+>
+> Typical mismatches: **private ↔ public**, **self-hosted ↔ cloud** (for example self-hosted GitLab → public GitHub, or GitHub Enterprise → public GitLab), and different organizational policies on each side. One-way mirroring does not keep the data “inside” the original space.
+>
+> **You** must confirm the destination is allowed to hold this history (including secrets accidentally committed). **Due care is yours.** The authors of this Action are **not responsible or liable** for its use or for data that leaves the source. Each job also prints this as an Actions **warning**. See [FAQ — Data movement, privacy, and liability](FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
-See [FAQ.md](FAQ.md) for design choices, loops, divergence, merges, recovery, alerts, and how this differs from [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
+See [FAQ.md](FAQ.md) for data-movement / liability, design choices, loops, divergence, merges, recovery, alerts, whether steps run on the runner or in Docker, and how this differs from other solutions [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
 ## What is mirrored
 
@@ -17,9 +22,7 @@ Not mirrored: issues, pull requests / merge requests, branch protection, secrets
 
 The Action never runs `git push --mirror`. It only updates the **event’s ref**.
 
-This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `scripts/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run.
-
-## Inputs
+## Actions Inputs
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
@@ -32,70 +35,102 @@ This Action lives in its own repository, so `actions/checkout` of the **source**
 | `skip_github_actors` | no | empty | Skip these GitHub usernames / `app[bot]` actors (bidirectional loop guard) |
 
 > [!NOTE]
-> This Action defaults `keep_divergent_refs` to **true** (fail closed). GitLab’s native push mirror defaults the same idea to **off** (overwrite). For a one-way GitHub → GitLab mirror that overwrites like GitLab, set this Action’s input to `false`. For bidirectional use, set **true on both sides**.
+> This Action defaults `keep_divergent_refs` to **true** (fail closed). GitLab’s native push mirror defaults the same idea to **off** (overwrite). For a one-way GitHub → GitLab mirror that overwrites like GitLab, set this varibale's value to `false`. For safe bidirectional use, set **true on both sides**.
 
 ## Setup
 
-Finish **GitHub**, then **GitLab**. You will set the same policy twice: they are independent and one side cannot change the other.
+* Add the [**Caller example**](#caller-example) to the source GitHub repo
+* Create [**credentials**](#credentials)
+* [**Configure GitHub Actions**](#configure-github-actions) (optionally [configure the GitLab repository](#configure-the-gitlab-repository))
+* [**Configure GitLab push mirroring**](#configure-gitlab-push-mirroring)
 
-| Policy | GitHub variable | GitLab mirror checkbox |
+Using the variables and options, you will set the same settings in both GitHub and GitLab: they are independent and the configured behaviour on one side cannot change the other.
+
+> [!CAUTION]
+> Enabling this workflow (and GitLab’s native push mirror, if you use it) **moves git history between systems**. Treat destination visibility, token scope, and “who can clone the other remote” as a governance decision, not only a sync setting. The Action will warn on every run; that warning does not replace your review.
+
+| Setting | GitHub variable | GitLab mirror checkbox |
 | --- | --- | --- |
 | Keep divergent refs (fail closed; **required for bidirectional**) | `KEEP_DIVERGENT_REFS=true` | **Keep divergent refs** checked |
 | Overwrite destination (can **lose commits**) | `KEEP_DIVERGENT_REFS=false` | **Keep divergent refs** unchecked (GitLab’s **default**) |
 | Only protected branches | `ONLY_PROTECTED_BRANCHES=true` | **Mirror only protected branches** checked |
 
 > [!IMPORTANT]
-> **Standalone** is GitHub → GitLab only (this Action). **Bidirectional** adds GitLab’s native **push** mirror (GitLab → GitHub). Do not use GitLab native pull/bidirectional mirroring. GitHub → GitLab is near-immediate. GitLab → GitHub is Sidekiq: within about five minutes, or about one minute if only protected branches are mirrored. Do not delay this Action to “match” GitLab; it compares **live GitLab** with `git ls-remote`.
+> **Standalone** is GitHub → GitLab only (this Action). **Bidirectional** is achieved by configuring GitLab’s native **push** mirror (GitLab → GitHub). GitHub → GitLab is near-immediate. GitLab → GitHub is Sidekiq: within about five minutes, or about one minute if only protected branches are mirrored. Do not delay this Action to “match” GitLab; it compares **live GitLab** with `git ls-remote`.
 
 > [!TIP]
-> For standalone, skip every step marked **Bidirectional only**.
+> For standalone, skip [Configure GitLab push mirroring](#configure-gitlab-push-mirroring) which sets up the GitLab’s native push mirror.
 
-### GitHub
+### Credentials
 
-1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action (`uses: VWJF/mirroring@main`). See [Caller example](#caller-example).
-2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Create the token on GitLab in the next section, then paste it here. Do not put the URL or token in the workflow file.
+#### GitHub credentials
 
-   ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
+1. Create a dedicated GitHub user (or GitHub App) used only as GitLab’s push-mirror credentials. Using a human account that also pushes real work is discouraged.
 
-3. Set repository **variables** (Settings → Secrets and variables → Actions → Variables):
-   - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`
-   - `GITLAB_USERNAME` (optional; default `oauth2`)
-   - `ONLY_PROTECTED_BRANCHES` (`true`/`false`; Action default `true`)
-   - `KEEP_DIVERGENT_REFS` (`true`/`false`; Action default `true`)
-   - `SKIP_GITHUB_ACTORS` — leave empty for standalone; for bidirectional, the dedicated GitHub username or `your-app[bot]` from step 5
+   On that account, create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) (Settings → Developer settings → Personal access tokens → Fine-grained tokens). Name the token, choose the **resource owner** that owns the GitHub repo, and set an expiration.
 
-   ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
+   ![New fine-grained personal access token: token name, resource owner, expiration](docs/github-create-fine-grained-pat.png)
 
-> [!WARNING]
-> The screenshot shows `KEEP_DIVERGENT_REFS=false` (overwrite GitLab). That can **lose commits**. For bidirectional use, set `KEEP_DIVERGENT_REFS=true`.
+   Under **Repository access**, choose **Only select repositories** and pick the GitHub repositories this token will apply to.
 
-4. Protect the GitHub branches you want mirrored. You will match this list on GitLab. Do not rewrite mirrored history.
+   Under **Permissions**, grant:
 
-5. **Bidirectional only:** create a **dedicated GitHub user or GitHub App** used only as GitLab’s push-mirror credentials. Do not use a human account that also pushes real work. Issue a PAT (or App token) with **Metadata: read** and **Contents (code): read/write**. If the repo contains `.github/workflows`, also grant **Workflows: read/write**. Set `SKIP_GITHUB_ACTORS` to that username (or `your-app[bot]`).
+   * **Metadata: Read-only** (required).
+   * **Contents: Read and write**.
+   * **Workflows: Read and write** if those repos contain `.github/workflows`.
 
-   ![GitHub PAT repository permissions: Metadata read, Contents (code) read and write](docs/github-pat-permissions.png)
+   Generate the token and paste it into GitLab’s mirroring credentials.
 
-> [!TIP]
-> Loop safety is this skip list **and** a no-op if GitLab already has the same SHA (`git ls-remote`). You still need `SKIP_GITHUB_ACTORS` so GitLab’s push back to GitHub does not retrigger the Action in a loop.
+   ![Fine-grained token: Only select repositories, Contents Read and write, Metadata Read-only](docs/github-fine-grained-pat-permissions.png)
 
-6. **Bidirectional only:** watch this repository and enable **Actions / failed workflow** notifications if you want maintainer alerts. GitHub emails the pusher by default, not every maintainer. See [Alerts](#alerts).
+#### GitLab credentials
 
-### GitLab
-
-Do this after the GitHub variables and (for bidirectional) the dedicated PAT exist.
-
-1. Create a GitLab **project or personal access token** with role **Maintainer** and scopes `api`, `read_repository`, `write_repository`. Paste it into GitHub secret `GITLAB_TOKEN`.
+1. Create a GitLab **project or personal access token** with role **Maintainer** and scopes `api`, `read_repository`, `write_repository` (Settings → Access Tokens). Paste it into GitHub secret `GITLAB_TOKEN`.
 
    ![GitLab project access token: role Maintainer, scopes api / read_repository / write_repository](docs/gitlab-project-access-token.jpeg)
 
 > [!WARNING]
-> **Developer** cannot push GitLab’s default protected `main` (`You are not allowed to push code to protected branches`). The token must be **allowed to push** that branch. You do **not** need to unprotect `main`. Leave “Allowed to force push” off unless `KEEP_DIVERGENT_REFS` is `false`.
+> **Developer** cannot push to GitLab’s default protected `main`. The token must be allowed to push branches that need syncing. You do **not** need to unprotect `main`. Leave “Allowed to force push” off unless `KEEP_DIVERGENT_REFS` is `false`.
 
-2. Protect the same branches as on GitHub (including `main`). Keep the two lists in sync.
+### Configure GitHub Actions
 
-3. Use **HTTPS** for GitLab clone/mirror URLs. GitLab push mirroring does not sync LFS over SSH. Both remotes must use the same object format (SHA-1 vs SHA-256). The Action never writes a credential helper or token to the runner’s `~/.gitconfig` (GitHub-hosted and self-hosted runners).
+1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action with the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`). See [Caller example](#caller-example). You can commit this file before **credentials** exist; runs will fail until [GitLab credentials](#gitlab-credentials) are in `GITLAB_TOKEN` (and, for bidirectional, until the GitHub PAT from [GitHub credentials](#github-credentials) is pasted into GitLab’s push mirror).
+2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Paste the GitLab token from [GitLab credentials](#gitlab-credentials).
 
-4. **Bidirectional only:** **Settings → Repository → Mirroring repositories** → **Add new mirror repository**. Check **Keep divergent refs** before you save.
+   ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
+
+3. Set repository **variables** (Settings → Secrets and variables → Actions → Variables):
+   - `GITLAB_URL` (required) — HTTPS clone URL, for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git` (do not add the URL or token directly in the workflow file).
+   - `GITLAB_USERNAME` (optional; default `oauth2`)
+   - `ONLY_PROTECTED_BRANCHES` (`true`/`false`; Action default `true`)
+   - `KEEP_DIVERGENT_REFS` (`true`/`false`; Action default `true`)
+   - `SKIP_GITHUB_ACTORS` — leave empty for standalone; for bidirectional, the dedicated GitHub username or `your-app[bot]` from [GitHub credentials](#github-credentials)
+
+   ![GitHub Actions repository variables: GITLAB_URL, KEEP_DIVERGENT_REFS, ONLY_PROTECTED_BRANCHES](docs/github-actions-variables.png)
+
+> [!NOTE]
+> The screenshot shows `KEEP_DIVERGENT_REFS=true`. That is the Action **default** and the **safer** choice: do not overwrite GitLab if the ref has diverged. Set `false` only if you want GitLab overwritten (can lose commits). For bidirectional use, keep `true`.
+
+4. Protect the GitHub branches you want mirrored (_\<repo>_ -> Settings -> Branches -> Add rule). You will match this list on GitLab. The branches protection rules add another layer of safety against rewriting mirrored history.
+
+> [!TIP]
+> Loop safety is this skip list **and** a no-op if GitLab already has the same SHA (`git ls-remote`). You still need `SKIP_GITHUB_ACTORS` (e.g. `your-app[bot]`) so GitLab’s push back to GitHub does not retrigger the Action in a loop.
+
+5. Watch this repository and enable **Actions / failed workflow** notifications if you want maintainer alerts. GitHub emails the pusher by default, not every maintainer. See [Alerts](#alerts).
+
+   <img src="docs/github-watch-repo.png" alt="GitHub repository Watch control" width="120">
+
+#### Configure the GitLab repository
+
+These are project settings, not strictly required for the mirroring.
+
+1. **Settings → Repository → Branch defaults** — use the same default branch as GitHub (merged-branch delete uses GitLab’s default).
+2. **Settings → Repository → Branch rules** — protect the same branches as on GitHub (including `main`). Keep the two lists in sync.
+3. **Settings → Repository → Protected branches → Add Protected Branch**
+
+### Configure GitLab push mirroring
+
+**Settings → Repository → Mirroring repositories** → **Add new mirror repository**. Check **Keep divergent refs** before you save.
 
    ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.png)
 
@@ -106,10 +141,13 @@ Do this after the GitHub variables and (for bidirectional) the dedicated PAT exi
    - Direction: **Push**
    - URL: `https://github.com/<owner>/<repo>.git`
    - Authentication: username and password
-   - Username: the dedicated GitHub account from the GitHub section
-   - Password: the GitHub PAT from the GitHub section
+   - Username: the dedicated GitHub account from [GitHub credentials](#github-credentials)
+   - Password: the GitHub PAT from [GitHub credentials](#github-credentials)
    - **Keep divergent refs:** checked (required for bidirectional)
    - **Mirror only protected branches:** checked if that matches `ONLY_PROTECTED_BRANCHES`
+
+> [!NOTE]
+> Use **HTTPS** for GitLab clone/mirror URLs. GitLab push mirroring does not sync LFS over SSH. Both remotes must use the same object format (SHA-1 vs SHA-256). The Action never writes a credential helper or token to the runner’s `~/.gitconfig` (GitHub-hosted and self-hosted runners).
 
 ### After a divergence
 
@@ -155,10 +193,15 @@ To get the same “tell every maintainer” behavior as GitLab, each person must
 
 ## Caller example
 
+> [!WARNING]
+> This workflow can be added before `GITLAB_TOKEN` exist. The workflow will not succeed until [GitLab credentials](#gitlab-credentials) are stored as `GITLAB_TOKEN` and `GITLAB_URL` is set. Bidirectional sync also needs the GitHub PAT from [GitHub credentials](#github-credentials) in GitLab’s push-mirror settings.
+
 > [!NOTE]
 > Do not add `on: create`. A tag push already fires `push`, so `create` runs the same job twice. `workflow_dispatch` only shows **Run workflow** in the Actions UI after this file exists on the repository **default branch**.
 
 ```yaml
+# .github/workflows/push-mirror.yml
+
 name: Push mirror to GitLab
 on:
   push:
@@ -184,7 +227,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           lfs: true
-      - uses: VWJF/mirroring@main
+      - uses: VWJF/mirroring@0.0.5-alpha  # replace with the current release tag: https://github.com/VWJF/mirroring/releases
         with:
           gitlab_url: ${{ vars.GITLAB_URL }}
           gitlab_username: ${{ vars.GITLAB_USERNAME || 'oauth2' }}
@@ -200,8 +243,44 @@ jobs:
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
 
+Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (including pre-releases such as `0.0.5-alpha` until a stable `v1` exists). A commit SHA still works for bisect.
+
+> [!NOTE]
+> Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
+
+> [!WARNING]
+> When using a self-hosted runner, it must have Docker installed, which is used by the step pushing to GitLab.
+
+## Publishing a release
+
+The GHCR image must exist **before** callers can use a docker-pinned Action. Do not retag an existing release. Bump is for **any** version (stable or pre-release); a `-` in the version (for example `-alpha`) only means you should pass `--prerelease` when you create the GitHub Release.
+
+1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag or change `action.yml`.
+2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This **retags** the existing `uses: docker://ghcr.io/vwjf/mirroring:<old>` pin in root `action.yml` to that version and commits that file on the branch you ran on (`chore: pin mirror image to <version>`). It no-ops if the pin is already that tag, and fails if GHCR has no such image (run Publish first) or if `action.yml` has no `docker://` pin (it does not convert a bash or docker-build step). It does **not** create a git tag or GitHub Release.
+3. **You** tag and create the GitHub Release (pre-release when the version contains `-`, e.g. `*-alpha`):
+
+```bash
+git pull
+git tag -a 0.0.3-alpha -m "0.0.3-alpha"
+git push origin 0.0.3-alpha
+gh release create 0.0.3-alpha --title 0.0.3-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.0.3-alpha." --prerelease
+```
+
+Omit `--prerelease` for a stable `x.y.z`. Callers then pin `uses: VWJF/mirroring@0.0.3-alpha`.
+
+From the CLI (needed until these workflows exist on the default branch):
+
+```bash
+gh workflow run publish.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Publish image is green
+gh workflow run bump-image.yml --ref dockerize -f version=0.0.3-alpha
+# wait until Bump image is green (action.yml committed), then tag + gh release create as above
+```
+
+Pushing a matching git tag still runs Publish image. Prefer dispatch so the image exists before you tag the Action.
+
 ## Tests
 
-Remote tests (updates, GitLab knobs, then the other direction) are driven from your machine. The Action is not invoked locally; GitHub Actions and GitLab’s native push mirror are the systems under test. See [tests/README.md](tests/README.md) and run `./tests/run.sh`.
+Remote tests (updates, GitLab options, then the other direction) are driven from your machine. The Action is not invoked locally; GitHub Actions and GitLab’s native push mirror are the systems under test. See [tests/README.md](tests/README.md) and run `./tests/run.sh`.
 
 [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror) is a sample caller. Its destination is set via `vars.GITLAB_URL` (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`).

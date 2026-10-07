@@ -56,7 +56,7 @@ DEFAULT_BRANCH="$(jq -r '.repository.default_branch // empty' "$GITHUB_EVENT_PAT
 # Auth is process-scoped only (env + git -c). Do not git config --global/--local
 # credential helpers: self-hosted runners reuse the machine and workspace.
 gitlab_host="$(printf '%s' "$GITLAB_URL" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' | cut -d/ -f1 | cut -d@ -f2)"
-ASKPASS="${ACTION_PATH}/scripts/askpass.sh"
+ASKPASS="${ACTION_PATH}/src/askpass.sh"
 chmod +x "$ASKPASS" 2>/dev/null || true
 export GIT_ASKPASS="$ASKPASS"
 export GITLAB_USERNAME GITLAB_TOKEN

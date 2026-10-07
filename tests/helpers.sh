@@ -151,7 +151,7 @@ setup() {
   [[ -n "$GITLAB_TOKEN" ]] || die "Could not read a GitLab token from glab."
   export GIT_TERMINAL_PROMPT=0 GITLAB_TOKEN GITLAB_USERNAME GH_TOKEN
 
-  # Branch that already has push-mirror.yml; knobs from Actions variables.
+  # Branch that already has push-mirror.yml; options from Actions variables.
   SOURCE_BRANCH="${SOURCE_BRANCH:-$(gh repo view "$GITHUB_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)}"
   DEFAULT_BRANCH="$(gh repo view "$GITHUB_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
   SKIP_ACTORS="$(gh variable get SKIP_GITHUB_ACTORS --repo "$GITHUB_REPO" 2>/dev/null || true)"

@@ -1,0 +1,137 @@
+name: Bump image
+
+# Retags the existing docker:// pin in action.yml to a published GHCR image
+# and commits that file. Does not convert bash/docker-build steps, create a
+# git tag, or create a GitHub Release — do those yourself after this is green.
+run-name: Bump image ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >
+          Version to pin in action.yml (e.g. 0.0.3-alpha or 1.0.0). Leading v is
+          stripped. Canonical image tag matches Publish image (no v-prefix).
+          Any version: a '-' only matters later, when you mark the GitHub Release
+          as a pre-release.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Require a branch
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref_type }}" != "branch" ]]; then
+            echo "::error::Run Bump image from a branch (github.ref_name), not a tag."
+            exit 1
+          fi
+
+      - name: Normalize version
+        id: ver
+        env:
+          RAW: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          raw="${RAW#"${RAW%%[![:space:]]*}"}"
+          raw="${raw%"${raw##*[![:space:]]}"}"
+          raw="${raw#v}"
+          if [[ ! "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$raw' (expected semver, e.g. 0.0.3-alpha)"
+            exit 1
+          fi
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${raw}"
+          {
+            echo "version=$raw"
+            echo "image=$image"
+          } >> "$GITHUB_OUTPUT"
+          echo "Canonical image tag: $image"
+
+      - name: Detect current pin
+        id: pin
+        env:
+          IMAGE: ${{ steps.ver.outputs.image }}
+        run: |
+          set -euo pipefail
+          pin="uses: docker://${IMAGE}"
+          prefix="uses: docker://${IMAGE%%:*}:"
+          if grep -Fq "$pin" action.yml; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "already bumped"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            if grep -Fq "$prefix" action.yml; then
+              echo "action.yml has a docker:// pin; will retag to docker://${IMAGE}"
+            else
+              echo "action.yml has no ${prefix} pin"
+            fi
+          fi
+
+      - uses: docker/login-action@v3
+        if: steps.pin.outputs.already != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if GHCR image does not exist
+        if: steps.pin.outputs.already != 'true'
+        env:
+          IMAGE: ${{ steps.ver.outputs.image }}
+        run: |
+          set -euo pipefail
+          if ! docker buildx imagetools inspect "$IMAGE"; then
+            echo "::error::GHCR image ${IMAGE} does not exist yet. Run the Publish image workflow with this version first."
+            exit 1
+          fi
+
+      - name: Retag Mirror ref pin
+        if: steps.pin.outputs.already != 'true'
+        env:
+          IMAGE: ${{ steps.ver.outputs.image }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          prefix="uses: docker://${IMAGE%%:*}:"
+          if ! grep -Fq "$prefix" action.yml; then
+            echo "::error::action.yml has no ${prefix} pin. Bump only retags an existing docker:// pin; it does not convert a bash or docker-build step. Pin the Mirror ref step to docker://${IMAGE%%:*}:<tag> first."
+            exit 1
+          fi
+          sed -i -E "s|(uses: docker://${IMAGE%%:*}:)[^[:space:]]+|\\1${VERSION}|" action.yml
+          if ! grep -Fq "uses: docker://${IMAGE}" action.yml; then
+            echo "::error::Failed to retag action.yml to docker://${IMAGE}"
+            exit 1
+          fi
+
+      - name: Commit and push action.yml
+        if: steps.pin.outputs.already != 'true'
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add action.yml
+          if git diff --cached --quiet; then
+            echo "::error::Retag step reported a change but action.yml has no diff"
+            exit 1
+          fi
+          git commit -m "chore: pin mirror image to ${VERSION}"
+
+          if ! git push origin "HEAD:${BRANCH}"; then
+            echo "::error::Failed to push to ${BRANCH}. Branch protection may block GITHUB_TOKEN. Allow GitHub Actions to push, or use a PAT with contents:write. Do not force-push or move tags."
+            exit 1
+          fi
