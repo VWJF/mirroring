@@ -130,8 +130,6 @@ These are project settings, not strictly required for the mirroring.
 
 ### Configure GitLab push mirroring
 
-Do this after the GitHub variables and the dedicated PAT exist.
-
 **Settings → Repository → Mirroring repositories** → **Add new mirror repository**. Check **Keep divergent refs** before you save.
 
    ![GitLab Add new mirror repository: Keep divergent refs checked](docs/gitlab-push-mirror.png)
@@ -196,7 +194,7 @@ To get the same “tell every maintainer” behavior as GitLab, each person must
 ## Caller example
 
 > [!WARNING]
-> This workflow can be added before tokens exist. It will not succeed until [GitLab credentials](#gitlab-credentials) are stored as `GITLAB_TOKEN` and `GITLAB_URL` is set. Bidirectional also needs the GitHub PAT from [GitHub credentials](#github-credentials) in GitLab’s push-mirror settings.
+> This workflow can be added before `GITLAB_TOKEN` exist. The workflow will not succeed until [GitLab credentials](#gitlab-credentials) are stored as `GITLAB_TOKEN` and `GITLAB_URL` is set. Bidirectional sync also needs the GitHub PAT from [GitHub credentials](#github-credentials) in GitLab’s push-mirror settings.
 
 > [!NOTE]
 > Do not add `on: create`. A tag push already fires `push`, so `create` runs the same job twice. `workflow_dispatch` only shows **Run workflow** in the Actions UI after this file exists on the repository **default branch**.
