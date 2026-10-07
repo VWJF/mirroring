@@ -12,18 +12,6 @@ Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **pus
 >
 > **You** must confirm the destination is allowed to hold this history (including secrets accidentally committed). **Due care is yours.** The authors of this Action are **not responsible or liable** for its use or for data that leaves the source. Each job also prints this as an Actions **warning**. See [FAQ — Data movement, privacy, and liability](FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
-A working example is in [Caller example](#caller-example). 
-
-Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (including pre-releases such as `0.0.5-alpha` until a stable `v1` exists):
-
-```yaml
-uses: VWJF/mirroring@0.0.5-alpha   # replace with the current release tag
-```
-
-A commit SHA still works for bisect. Self-hosted runners must have Docker installed for the step pushing to GitLab.
-
-Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
-
 See [FAQ.md](FAQ.md) for data-movement / liability, design choices, loops, divergence, merges, recovery, alerts, whether steps run on the runner or in Docker, and how this differs from other solutions [SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action) and [pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action).
 
 ## What is mirrored
@@ -241,7 +229,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           lfs: true
-      - uses: VWJF/mirroring@0.0.5-alpha  # latest tag: https://github.com/VWJF/mirroring/releases
+      - uses: VWJF/mirroring@0.0.5-alpha  # replace with the current release tag: https://github.com/VWJF/mirroring/releases
         with:
           gitlab_url: ${{ vars.GITLAB_URL }}
           gitlab_username: ${{ vars.GITLAB_USERNAME || 'oauth2' }}
@@ -256,6 +244,14 @@ jobs:
 > `cancel-in-progress` must stay **false** so an in-flight `git push` is not aborted.
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
+
+Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (including pre-releases such as `0.0.5-alpha` until a stable `v1` exists). A commit SHA still works for bisect.
+
+> [!NOTE]
+> Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
+
+> [!WARNING]
+> When using a self-hosted runner, it must have Docker installed, which is used by the step pushing to GitLab.
 
 ## Publishing a release
 
