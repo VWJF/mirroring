@@ -12,13 +12,15 @@ Reusable Action ([VWJF/mirroring](https://github.com/VWJF/mirroring)) that **pus
 >
 > **You** must confirm the destination is allowed to hold this history (including secrets accidentally committed). **Due care is yours.** The authors of this Action are **not responsible or liable** for its use or for data that leaves the source. Each job also prints this as an Actions **warning**. See [FAQ — Data movement, privacy, and liability](FAQ.md#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
+A working example is in [Caller example](#caller-example). 
+
 Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (including pre-releases such as `0.0.5-alpha` until a stable `v1` exists):
 
 ```yaml
 uses: VWJF/mirroring@0.0.5-alpha   # replace with the current release tag
 ```
 
-A commit SHA still works for bisect. Self-hosted runners need Docker for the GitLab push step.
+A commit SHA still works for bisect. Self-hosted runners must have Docker installed for the step pushing to GitLab.
 
 Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
 
@@ -34,7 +36,7 @@ The Action never runs `git push --mirror`. It only updates the **event’s ref**
 
 This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `src/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`.
 
-## Inputs
+## Actions Inputs
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
@@ -193,6 +195,7 @@ To get the same “tell every maintainer” behavior as GitLab, each person must
 > Do not add `on: create`. A tag push already fires `push`, so `create` runs the same job twice. `workflow_dispatch` only shows **Run workflow** in the Actions UI after this file exists on the repository **default branch**.
 
 ```yaml
+# .github/workflows/push-mirrow.yml
 name: Push mirror to GitLab
 on:
   push:
