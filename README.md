@@ -51,7 +51,12 @@ The Action never runs `git push --mirror`. It only updates the **event’s ref**
 
 ## Setup
 
-Create **credentials** first, then **configure GitHub Actions** (optionally **configure the GitLab repository**), then **configure GitLab push mirroring**. You will set the same policy twice: they are independent and one side cannot change the other.
+* Add the [**Caller example**](#caller-example) to the source GitHub repo
+* Create **credentials**
+* **Configure GitHub Actions** (optionally configure the GitLab repository)
+* **Configure GitLab push mirroring**
+
+Using the variables and options, you will set the same policy in both GitHub and GitLab: they are independent and the configured behaviour on one side cannot change the other.
 
 > [!CAUTION]
 > Enabling this workflow (and GitLab’s native push mirror, if you use it) **moves git history between systems**. Treat destination visibility, token scope, and “who can clone the other remote” as a governance decision, not only a sync setting. The Action will warn on every run; that warning does not replace your review.
@@ -101,7 +106,7 @@ Create **credentials** first, then **configure GitHub Actions** (optionally **co
 
 ### Configure GitHub Actions
 
-1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action with the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`). See [Caller example](#caller-example).
+1. In the **source** GitHub repo, add a workflow that checks out that repo, then calls this Action with the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`). See [Caller example](#caller-example). You can commit this file before **credentials** exist; runs will fail until [GitLab credentials](#gitlab-credentials) are in `GITLAB_TOKEN` (and, for bidirectional, until the GitHub PAT from [GitHub credentials](#github-credentials) is pasted into GitLab’s push mirror).
 2. Add repository **secret** `GITLAB_TOKEN` (Settings → Secrets and variables → Actions → Secrets). Paste the GitLab token from [GitLab credentials](#gitlab-credentials).
 
    ![GitHub Actions repository secrets: GITLAB_TOKEN](docs/github-actions-secrets.jpeg)
@@ -201,6 +206,9 @@ GitHub has **no** mirror-failure mail to all maintainers. A red workflow is only
 To get the same “tell every maintainer” behavior as GitLab, each person must subscribe, or the caller workflow must add an extra `if: failure()` step (issue, Slack, and so on). This Action does not send that extra alert.
 
 ## Caller example
+
+> [!WARNING]
+> This workflow can be added before tokens exist. It will not succeed until [GitLab credentials](#gitlab-credentials) are stored as `GITLAB_TOKEN` and `GITLAB_URL` is set. Bidirectional also needs the GitHub PAT from [GitHub credentials](#github-credentials) in GitLab’s push-mirror settings.
 
 > [!NOTE]
 > Do not add `on: create`. A tag push already fires `push`, so `create` runs the same job twice. `workflow_dispatch` only shows **Run workflow** in the Actions UI after this file exists on the repository **default branch**.
