@@ -1,20 +1,20 @@
 # FAQ: GitHub → GitLab push-mirror Action
 
-For operators of a GitHub↔GitLab pair. This records the design questions, the choices we made, and what to do in production. **Mirroring copies git history to another server;** read [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees) before you enable it.
+For operators of a GitHub ↔ GitLab pair. This records the design questions, the choices we made, and what to do in production. **Mirroring copies git history to another server;** read [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees) before you enable it.
 
 ## What this is
 
-### Why not GitLab native bidirectional or pull mirroring?
+### Why not use GitLab's native bidirectional or pull mirroring?
 
-GitLab **pull** mirroring (and therefore native bidirectional mirroring) is Premium and is not available on this GitLab instance. GitLab **push** mirroring (GitLab → GitHub) is available.
+GitLab **pull** mirroring (and therefore native bidirectional mirroring) is a Premium fearure and may not be available on a GitLab instance. GitLab **push** mirroring (GitLab → GitHub) is available in the Free tier.
 
-**Choice:** compose GitLab’s native push mirror (GitLab → GitHub) with this GitHub Action (GitHub → GitLab). Do not use GitLab native pull/bidirectional.
+**Design Choice:** compose GitLab’s native push mirror (GitLab → GitHub) with this GitHub Action (GitHub → GitLab). Do not use GitLab native pull/bidirectional.
 
 ### Why not SvanBoxel or pixta’s mirroring Actions?
 
-They solve a **different problem**: one-way “copy git objects to another remote.” This Action **emulates GitLab push-mirror** so it can sit next to GitLab’s native GitLab → GitHub mirror without overwriting or pruning history.
+They solve a **different problem**: one-way “copy git objects to another remote.” Our Action **emulates GitLab push-mirror** so it can sit next to GitLab’s native GitLab → GitHub mirror without overwriting or pruning history.
 
-**[SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action)** pushes the current GitHub branch to GitLab so GitLab CI runs, then **polls until CI finishes** and posts a GitHub commit status. The GitHub job stays up for the whole GitLab pipeline (billed minutes). Mirroring is a vehicle for CI, not a bidirectional git sync.
+**[SvanBoxel/gitlab-mirror-and-ci-action](https://github.com/SvanBoxel/gitlab-mirror-and-ci-action)** pushes the current GitHub branch to GitLab so GitLab CI runs, then **polls back until CI finishes** and posts a GitHub commit status. The GitHub job stays up for the whole GitLab pipeline (billed minutes). Mirroring is a vehicle for CI, not a bidirectional git sync.
 
 - **Pros:** GitLab pipeline traces in the Action log; GitHub commit status (`gitlab-ci` context); one-branch push (not a full-repo `--mirror`); default is fast-forward; optional `--tags`.
 - **Cons / shortcomings:** No `keep_divergent_refs`, no protected-branch filter, no actor skip, no live `ls-remote` no-op, no ancestry-based branch delete, no tag-prune policy (it simply never prunes). `FORCE_PUSH` is a blunt env flag. Writes `git config --global` plus `credential.helper cache` (creds can linger on self-hosted runners). Docker Action; typically consumed as `@master`. Does not wait-report if you only wanted git sync.
@@ -22,7 +22,7 @@ They solve a **different problem**: one-way “copy git objects to another remot
 **[pixta-dev/repository-mirroring-action](https://github.com/pixta-dev/repository-mirroring-action)** is a generic full-repo copy (GitHub → GitLab / Bitbucket / CodeCommit). It force-pushes **all** branches and tags and **prunes** destination refs missing on the source (`git push --tags --force --prune …`).
 
 - **Pros:** Makes the destination identical in one shot; SSH; works for remotes other than GitLab; Docker isolates the SSH key on the container.
-- **Cons / shortcomings:** Closer to `git push --mirror` than GitLab push-mirror. Unmerged destination-only branches are deleted. Diverged tips are overwritten. Unsafe next to GitLab’s native push mirror (a GitLab→GitHub push would retrigger it and it would force+prune GitLab back to GitHub’s full ref set). SSH only (`StrictHostKeyChecking=no`). Old Alpine image. No GitLab knobs, no loop guards.
+- **Cons / shortcomings:** Closer to `git push --mirror` than GitLab push-mirror. Unmerged destination-only branches are deleted. Diverged tips are overwritten. It is unsafe next to GitLab’s native push mirror (a GitLab→GitHub push would retrigger it and it would force+prune GitLab back to GitHub’s full ref set). SSH only (`StrictHostKeyChecking=no`). Old Alpine base image. No GitLab options, no loop guards.
 
 **This Action** syncs **one event ref**, never `--mirror`/`--prune`s the whole repo, fail-closes on divergence when `keep_divergent_refs` is true, deletes GitLab branches only if merged into the default (git ancestry), never prunes tags, skips `skip_github_actors`, and no-ops when live `git ls-remote` already matches. Hybrid packaging: composite skip-actor + checkout on the runner; `mirror.sh` in Docker. HTTPS + process-scoped `GIT_ASKPASS` (no `~/.gitconfig`). It does **not** poll GitLab CI or set GitHub commit statuses.
 
@@ -36,25 +36,25 @@ They solve a **different problem**: one-way “copy git objects to another remot
 | Transport | HTTPS + PAT | SSH key | HTTPS + PAT |
 | Packaging | Docker | Docker | Hybrid (composite + Docker `mirror.sh`) |
 
-**Choice:** do not use those Actions as the GitHub half of a GitLab native push-mirror pair. Use SvanBoxel if you need GitLab CI status back on GitHub. Use pixta if the destination is a disposable copy you are willing to force-update and prune.
+**Design Choice:** do not use those Actions as the GitHub half of a GitLab native push-mirror pair. Use SvanBoxel if you need GitLab CI status back on GitHub. Use pixta if the destination is a disposable copy you are willing to force-update and prune.
 
 ### Does the Action work without GitLab’s native mirror?
 
-**Yes.** Used alone it is a GitHub → GitLab **push mirror** with the same deletion rules and knobs as GitLab (`only_protected_branches`, `keep_divergent_refs`, merged-branch delete, no tag prune). Bidirectional is optional: turn on GitLab’s native push mirror and `skip_github_actors` when you want the other direction.
+**Yes.** Used alone it is a GitHub → GitLab **push mirror** with the same deletion rules and options as GitLab (`only_protected_branches`, `keep_divergent_refs`, merged-branch delete, no tag prune). Bidirectional is optional and enabled by turnning on GitLab’s native push mirror and `skip_github_actors` when you want the other direction.
 
 ### Must GitHub be public and GitLab private?
 
-**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you need the protection APIs). Changing visibility after mirroring does **not** unsay data already copied. See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
+**No.** Visibility can change. Callers always provide credentials (`gitlab_token`, and `github_token` when the GitHub repo is private or you are syncing protected branches (which use the protection APIs). Changing visibility after mirroring does **not** revert already copied data. See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
 ### Does mirroring keep the source’s security and privacy guarantees?
 
 **No.** This Action (GitHub → GitLab) and GitLab’s native push mirror (GitLab → GitHub) **copy git objects onto another Git server**. Examples: self-hosted GitLab → public GitHub, GitHub Enterprise (`github.sfu.ca`) → public GitLab, private → public, on-prem → cloud.
 
-A one-way mirror is still an **export**. After a successful push, that history lives under the destination’s access control, logging, backups, legal process, and terms of service. The Action does not redact files, skip secrets in old commits, or enforce that both remotes have the same visibility.
+A one-way mirror is still an export. After a successful push, that history lives under the destination’s access control, logging, backups, legal process, and terms of service. The Action does not redact files, skip secrets in old commits, or enforce that both remotes have the same visibility.
 
-**You** must decide that the destination is allowed to hold this data and must exercise due care (policy, privacy, export control, and who can clone either remote). **The authors of this Action are not responsible or liable** for how it is used or for data that leaves the source.
+**You** must determine that the destination is allowed to hold this data and must exercise due care (policy, privacy, export control, and who can clone either remote). **The authors of this Action are not responsible or liable** for how it is used or for data that leaves the source.
 
-Every Action run emits a GitHub **warning** with the same point. That notice is not a consent dialog and does not block the job.
+Every Action run emits a GitHub **warning** with the same message. That notice is not a consent dialog and does not block the job.
 
 ## What is mirrored
 
@@ -66,26 +66,26 @@ Not mirrored (platform metadata): issues, pull requests / merge requests, protec
 
 ### Why not a branch allowlist (regex)?
 
-GitLab Free push-mirror’s closest control is **Only mirror protected branches**, not a regex allowlist (that is Premium).
+GitLab Free push-mirror’s closest control is the option **only mirror protected branches**, not a regex allowlist (that is a Premium feature).
 
-**Choice:** treat GitHub the same. Input `only_protected_branches` defaults to `true`. The Action checks GitHub classic branch protection and, when practical, rulesets. If protection status cannot be determined, it **fails closed** (does not push everything). It never runs `git push --mirror`; it only syncs the event’s ref.
+**Design Choice:** treat GitHub Actions the same. The input `only_protected_branches` defaults to `true`. The Action checks GitHub classic branch protection and, when practical, rulesets. If protection status cannot be determined, it **fails closed** (does not push everything). It never runs `git push --mirror`; it only syncs the event’s ref.
 
 ### If GitHub is public, does GitLab history become public?
 
-If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the pair. The same applies in reverse (public GitLab, private GitHub). See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
+If you mirror to a public GitHub repo, that **git history is public**. The Action does not filter files or commits. That is a visibility choice for the repo. The same applies in reverse (public GitLab, private GitHub). See [Does mirroring keep the source’s security and privacy guarantees?](#does-mirroring-keep-the-sources-security-and-privacy-guarantees).
 
-## Knobs (match GitLab)
+## Mirror options (match GitLab)
 
 ### Is “keep divergent refs” a parameter?
 
 **Yes.** `keep_divergent_refs`.
 
-- GitLab’s native default is overwrite (`false`): a diverged destination ref is force-updated and dest-only refs can be removed when GitLab would delete a merged branch.
-- **Choice for this Action’s default:** `true`, because bidirectional use must not clobber the other side. Set `false` if you want a one-way GitHub → GitLab mirror that overwrites like GitLab’s native default.
+- GitLab’s native default is to overwrite (`keep_divergent_refs=false`): a diverged destination ref is force-updated and dest-only refs can be removed when GitLab would delete a merged branch.
+- **This Action’s default:** `true` (safest), because bidirectional sync must not clobber the other side. Set `false` if you want a one-way GitHub → GitLab mirror that overwrites (like GitLab’s native default).
 
 For bidirectional mirroring, set **true on both** this Action and GitLab’s native push mirror.
 
-These are **two independent checkboxes**. This Action’s `keep_divergent_refs: true` only governs **GitHub → GitLab**. It does **not** constrain GitLab’s native push mirror. GitLab’s default is **overwrite** (`Keep divergent refs` **off**). If that box is left at default, GitLab will force-update GitHub when the tips diverge, even though the Action would have failed closed the other way. Enable **Keep divergent refs** on the GitLab mirror, or GitHub history can be rewritten.
+These are **two independent options**, the GitHub Action's choice and the GitLab native mirror. This Action’s `keep_divergent_refs: true` only governs GitHub → GitLab. It does **not** constrain GitLab’s native push mirror. GitLab’s default is **overwrite** (`Keep divergent refs` **off**). If that box is left at default, GitLab will force-update GitHub when the tips diverge, even though the Action would have failed closed the other way. Enable **Keep divergent refs** on the GitLab mirror, or else GitHub history could be rewritten.
 
 ### Is “only protected branches” a parameter?
 
@@ -95,7 +95,7 @@ These are **two independent checkboxes**. This Action’s `keep_divergent_refs: 
 
 Like GitLab: only if the branch was **deleted on GitHub** and its tip is **merged into the default branch** (git ancestry: `merge-base --is-ancestor`). Unmerged branches are left alone.
 
-If `keep_divergent_refs` is `true`, dest-only refs are left untouched (no delete), matching GitLab’s keep-divergent behavior.
+If `keep_divergent_refs` is `true`, dest-only refs are left untouched (not deleted), matching GitLab’s keep-divergent behavior.
 
 **Squash/rebase caveat:** GitLab’s “merged” check is git ancestry, not “GitHub says the PR merged.” A squash-merged branch is often **not** an ancestor of `main`, so the Action (like GitLab) **leaves** that branch on GitLab. We do not add extra GitHub-PR heuristics.
 
@@ -109,16 +109,16 @@ If `keep_divergent_refs` is `true`, dest-only refs are left untouched (no delete
 
 GitLab’s native mirror pushing to GitHub would retrigger this Action.
 
-**Choice:** both of:
+There are two independent mechanisms to prevent a loop:
 
-1. `skip_github_actors` — optional list. If `github.actor` matches, exit 0. For bidirectional, use a **dedicated GitHub user or GitHub App** as GitLab’s push-mirror credentials (not a human who also pushes real work). If unset, standalone mode: do not skip.
-2. Idempotent SHA check — `git ls-remote` live GitLab; if the destination already has that SHA, no-op (success). This still uses Actions minutes but is the backstop when actor skip is misconfigured.
+1. `skip_github_actors` variable — optional list. If `github.actor` matches, exit 0. For bidirectional, use a **dedicated GitHub user or GitHub App** as GitLab’s push-mirror credentials (not a human who also pushes real work). If unset, default in the standalone mode does not skip.
+2. Idempotent SHA check — `git ls-remote` against GitLab; if the destination already has that SHA, then there is nothing to sync; no-op (success). This still uses Actions minutes but is the backstop when actor skip is misconfigured.
 
-Pushes from this Action use a GitLab token, not `GITHUB_TOKEN`. GitHub’s “GITHUB_TOKEN does not retrigger workflows” does **not** stop the GitLab → GitHub → Action loop.
+GitHub will not start a new workflow when a job pushes **to GitHub** with the default `GITHUB_TOKEN`. That is an anti-recursion rule for Actions on the same repo. It does **not** apply here: GitLab’s native mirror pushes to GitHub with **your GitHub PAT/App**, and this Action pushes to GitLab with **`gitlab_token`**. Neither of those is `GITHUB_TOKEN`, so GitHub still runs this workflow on the mirrored push. Use `skip_github_actors` and the SHA no-op; do not rely on `GITHUB_TOKEN`.
 
 ### Why is GitLab → GitHub slower than GitHub → GitLab?
 
-GitLab push-mirror is **not** a git hook. It is a Sidekiq background job: the remote is updated **within about five minutes**, or **about one minute** if **Only mirror protected branches** is on. A cron considers due mirrors about once a minute, subject to capacity and retry backoff. Forced **Update now** is rate-limited.
+GitLab push-mirror is **not** a git hook. It is a Sidekiq background job: the remote is updated **within about five minutes**, or **about one minute** if **Only mirror protected branches** is selected. A cron considers due mirrors about once a minute, subject to capacity and retry backoff. Forced **Update now** is rate-limited.
 
 This Action is event-driven (`on: push`) and starts in seconds.
 
@@ -126,7 +126,7 @@ This Action is event-driven (`on: push`) and starts in seconds.
 
 **No.** Delaying GitHub does not remove concurrent-write races: if both remotes already have different commits, the tips have diverged. GitLab’s delay is “within N minutes,” not an exact interval, so it cannot be matched. Sleeping in Actions also burns billed minutes.
 
-**Choice:** the Action stays immediate and compares against **live GitLab** (`git ls-remote`), not against GitHub’s copy of GitLab (which can be 1–5 minutes stale). GitLab → GitHub lag is accepted.
+**Design Choice:** the Action stays immediate and compares against **live GitLab** (`git ls-remote`), not against GitHub’s copy of GitLab (which can be 1–5 minutes stale). GitLab → GitHub lag is accepted.
 
 Rejected for v1: debounce/sleep to mimic GitLab; GitLab-side CI/API “Update now” to speed the native mirror.
 
@@ -150,11 +150,11 @@ Extra failure modes even when targets started in sync:
 1. GitHub squash/merge creates SHA `G`; GitLab MR merge creates SHA `L`. Neither is an ancestor of the other. PRs/MRs are not mirrored, so the other request can stay open (especially squash: GitLab does not see the original feature commits in `main`).
 2. Squash/rebase then delete the feature branch: leftover destination branch + open MR invites a second merge.
 
-**Choice:** emulate GitLab push-mirror. The Action does **not** `git merge` the two target tips, rebase the merge, or close the other side’s MR. Same fail-or-overwrite rule as any diverged ref.
+**Design Choice:** emulate GitLab push-mirror. The Action does **not** `git merge` the two target tips, rebase the merge, or close the other side’s MR. Same fail-or-overwrite rule as any diverged ref.
 
 **Recovery (manual):** on one machine, fetch both remotes, merge or rebase the two target tips until they share one tip, push that tip to **one** remote, let mirroring copy it, then close leftover PRs/MRs. Do not merge the same feature independently on both sides.
 
-### The GitHub→GitLab job failed, so I edited GitLab `main` to debug. GitHub history vanished.
+### The GitHub → GitLab job failed, so I edited GitLab `main` to debug. GitHub history vanished.
 
 That is expected once the tips have diverged, and it is easy to do by accident.
 
@@ -210,13 +210,20 @@ The Action prints GitLab’s message (with tokens redacted). Common causes: prot
 
 ## Packaging
 
+### Does this Action run on the runner or in Docker?
+
+Callers still use one `uses: VWJF/mirroring@…`. Inside, `action.yml` is a **composite** Action (`runs: using: composite`): a list of steps. Most of those steps run on the job’s VM. The GitLab push step is a **Docker** image (`uses: docker://ghcr.io/vwjf/mirroring:…`). Some docs call that mix a hybrid Action; you do not need that word to use it.
+
+- **On the runner (composite):** data-movement warning, `skip_github_actors`, and `actions/checkout`. Those need the workflow context (`github.actor`, `GITHUB_OUTPUT`, the source checkout).
+- **In Docker:** only `mirror.sh` (and `askpass.sh`). `git`, Git LFS, `jq`, and `gh` come from the image, not whatever the runner has.
+
+It is not a pure composite (all bash on the runner) and not a pure Docker Action (the whole job in one container). Self-hosted runners need Docker for the push step. The image is built from the repo-root `Dockerfile`; it copies those `src/` scripts.
+
 ### Where does the Action live?
 
-This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Prefer SemVer pins: `uses: VWJF/mirroring@v1` (moving major) or `uses: VWJF/mirroring@v1.2.3` (exact). SHA still works for bisect. Do not use `@main` as the production pin. Images published to GHCR on `vMAJOR.MINOR.PATCH` tags also get moving `vMAJOR` / `vMAJOR.MINOR` and `sha-…` tags; `latest` is not the recommended runtime pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
+This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Pin the latest **release tag** from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`), not `@main`. There is no stable `v1.0.0` yet; current tags are pre-releases (for example `0.0.5-alpha`). A commit SHA still works for bisect. Do not use the GHCR image tag `latest` as the Action pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
-Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `src/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events.
-
-Skip-actor and checkout stay on the runner (composite). Only the GitLab push (`mirror.sh` + `askpass.sh`) runs in the container, with `git`, `git-lfs`, `jq`, and `gh` pinned in the image rather than whatever the runner has. The image is built from the repo-root `Dockerfile` (context `.`); it copies those same `src/` scripts. Self-hosted runners need Docker for that step. Credential handling is unchanged: process-scoped `GIT_ASKPASS` and `git -c`, no `~/.gitconfig`.
+Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `src/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events. Credential handling is process-scoped `GIT_ASKPASS` and `git -c`, not `~/.gitconfig`. See [Does this Action run on the runner or in Docker?](#does-this-action-run-on-the-runner-or-in-docker).
 
 ### Can the manual mirror tests be automated?
 
