@@ -40,9 +40,9 @@ The Action never runs `git push --mirror`. It only updates the **event’s ref**
 ## Setup
 
 * Add the [**Caller example**](#caller-example) to the source GitHub repo
-* Create **credentials**
-* **Configure GitHub Actions** (optionally configure the GitLab repository)
-* **Configure GitLab push mirroring**
+* Create [**credentials**](#credentials)
+* [**Configure GitHub Actions**](#configure-github-actions) (optionally [configure the GitLab repository](#configure-the-gitlab-repository))
+* [**Configure GitLab push mirroring**](#configure-gitlab-push-mirroring)
 
 Using the variables and options, you will set the same policy in both GitHub and GitLab: they are independent and the configured behaviour on one side cannot change the other.
 
