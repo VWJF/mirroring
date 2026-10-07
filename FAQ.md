@@ -223,7 +223,7 @@ It is not a pure composite (all bash on the runner) and not a pure Docker Action
 
 This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Pin the latest **release tag** from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`), not `@main`. There is no stable `v1.0.0` yet; current tags are pre-releases (for example `0.0.5-alpha`). A commit SHA still works for bisect. Do not use the GHCR image tag `latest` as the Action pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
-Keeping the Action in a separate repo means `actions/checkout` of the source cannot delete `src/` (`github.action_path` is this repository). The Action checks out the triggering SHA, not the source’s default branch, except on delete events. Credential handling is process-scoped `GIT_ASKPASS` and `git -c`, not `~/.gitconfig`. See [Does this Action run on the runner or in Docker?](#does-this-action-run-on-the-runner-or-in-docker).
+This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `src/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`. See [Does this Action run on the runner or in Docker?](#does-this-action-run-on-the-runner-or-in-docker) and [What tokens are required?](#what-tokens-are-required).
 
 ### Can the manual mirror tests be automated?
 
