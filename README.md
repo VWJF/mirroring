@@ -44,19 +44,19 @@ The Action never runs `git push --mirror`. It only updates the **event’s ref**
 * [**Configure GitHub Actions**](#configure-github-actions) (optionally [configure the GitLab repository](#configure-the-gitlab-repository))
 * [**Configure GitLab push mirroring**](#configure-gitlab-push-mirroring)
 
-Using the variables and options, you will set the same policy in both GitHub and GitLab: they are independent and the configured behaviour on one side cannot change the other.
+Using the variables and options, you will set the same settings in both GitHub and GitLab: they are independent and the configured behaviour on one side cannot change the other.
 
 > [!CAUTION]
 > Enabling this workflow (and GitLab’s native push mirror, if you use it) **moves git history between systems**. Treat destination visibility, token scope, and “who can clone the other remote” as a governance decision, not only a sync setting. The Action will warn on every run; that warning does not replace your review.
 
-| Policy | GitHub variable | GitLab mirror checkbox |
+| Setting | GitHub variable | GitLab mirror checkbox |
 | --- | --- | --- |
 | Keep divergent refs (fail closed; **required for bidirectional**) | `KEEP_DIVERGENT_REFS=true` | **Keep divergent refs** checked |
 | Overwrite destination (can **lose commits**) | `KEEP_DIVERGENT_REFS=false` | **Keep divergent refs** unchecked (GitLab’s **default**) |
 | Only protected branches | `ONLY_PROTECTED_BRANCHES=true` | **Mirror only protected branches** checked |
 
 > [!IMPORTANT]
-> **Standalone** is GitHub → GitLab only (this Action). **Bidirectional** adds GitLab’s native **push** mirror (GitLab → GitHub). GitHub → GitLab is near-immediate. GitLab → GitHub is Sidekiq: within about five minutes, or about one minute if only protected branches are mirrored. Do not delay this Action to “match” GitLab; it compares **live GitLab** with `git ls-remote`.
+> **Standalone** is GitHub → GitLab only (this Action). **Bidirectional** is achieved by configuring GitLab’s native **push** mirror (GitLab → GitHub). GitHub → GitLab is near-immediate. GitLab → GitHub is Sidekiq: within about five minutes, or about one minute if only protected branches are mirrored. Do not delay this Action to “match” GitLab; it compares **live GitLab** with `git ls-remote`.
 
 > [!TIP]
 > For standalone, skip [Configure GitLab push mirroring](#configure-gitlab-push-mirroring) which sets up the GitLab’s native push mirror.
