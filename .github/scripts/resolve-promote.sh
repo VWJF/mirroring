@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Set GITHUB_OUTPUT for Promote image:
-#   mode, version, image_git_tag, pin_tag, checkout_ref, match_default
+#   mode, version, image_git_tag, pin_tag, checkout_ref, pin_start, match_default
 #
 # A version on the default branch: open a pin PR (and compare image files to main).
 # A version on any other branch: commit that pin on that branch (skip the main check).
 # No version on a feature branch: commit branch-* on that branch.
+# An image/v* tag that is the default-branch tip: pin PR to main.
+# Any other image/v* tag: pin the unique feature branch, starting at the tag.
 set -euo pipefail
 # shellcheck source=common.sh
 . "$(dirname "$0")/common.sh"
@@ -20,6 +22,7 @@ image_git_tag=""
 branch_tag=""
 pin_tag=""
 checkout_ref=""
+pin_start=""
 match_default=false
 
 # Remote branches that contain a commit, not including origin/HEAD.
@@ -34,15 +37,16 @@ pin_version() {
   pin_tag="$version"
 }
 
-# image/v* tag from Publish: pin main if that commit is already on main,
-# otherwise pin the unique feature branch that has the tag.
+# image/v* tag from Publish: pin main only if the tag is the default-branch
+# tip. Otherwise pin the unique feature branch, from the tagged commit.
 pin_from_image_tag() {
   # Heads only. fetch --tags clobbers the tag that triggered this run.
   git fetch origin --prune --no-tags
-  local tag_commit found="" b
+  local tag_commit found="" b default_head
   tag_commit="$(git rev-parse "${image_git_tag}^{commit}" 2>/dev/null || git rev-parse "HEAD^{commit}")"
+  default_head="$(git rev-parse "origin/${DEFAULT_BRANCH}")"
 
-  if git merge-base --is-ancestor "$tag_commit" "origin/${DEFAULT_BRANCH}"; then
+  if [[ "$tag_commit" == "$default_head" ]]; then
     mode=promote
     checkout_ref="$DEFAULT_BRANCH"
     match_default=true
@@ -60,6 +64,7 @@ pin_from_image_tag() {
   [[ -n "$found" ]] || die "Tag ${image_git_tag} is not on a remote branch. Run Promote from the branch to pin."
   mode=pin-branch
   checkout_ref="$found"
+  pin_start="$image_git_tag"
 }
 
 if [[ -n "${INPUT_VERSION:-}" ]]; then
@@ -91,6 +96,7 @@ out version "$version"
 out image_git_tag "$image_git_tag"
 out branch_tag "$branch_tag"
 out checkout_ref "$checkout_ref"
+out pin_start "$pin_start"
 out pin_tag "$pin_tag"
 out match_default "$match_default"
-echo "mode=$mode pin=$pin_tag checkout=$checkout_ref match_default=$match_default"
+echo "mode=$mode pin=$pin_tag checkout=$checkout_ref pin_start=${pin_start:-origin/$checkout_ref} match_default=$match_default"

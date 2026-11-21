@@ -52,10 +52,12 @@ jobs:
       - name: Check out pin target
         env:
           CHECKOUT_REF: ${{ steps.mode.outputs.checkout_ref }}
+          PIN_START: ${{ steps.mode.outputs.pin_start }}
         run: |
           set -euo pipefail
           git fetch origin "$CHECKOUT_REF"
-          git checkout -B "$CHECKOUT_REF" "origin/${CHECKOUT_REF}"
+          start="${PIN_START:-origin/${CHECKOUT_REF}}"
+          git checkout -B "$CHECKOUT_REF" "$start"
 
       - uses: docker/login-action@v3
         with:
@@ -161,6 +163,6 @@ jobs:
           git add action.yml
           git commit -m "chore: pin mirror image to ${PIN_TAG}"
           if ! git push origin "HEAD:${BRANCH}"; then
-            echo "::error::Failed to push pin to ${BRANCH}. Branch protection may block GITHUB_TOKEN."
+            echo "::error::Failed to push pin to ${BRANCH}. If the branch moved past the image tag, retag from the tip or run Promote on that branch. Branch protection may also block GITHUB_TOKEN."
             exit 1
           fi
