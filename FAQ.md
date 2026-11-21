@@ -221,7 +221,7 @@ It is not a pure composite (all bash on the runner) and not a pure Docker Action
 
 ### How are the image and the Action released?
 
-They are separate artifacts. `image/vX.Y.Z` publishes `ghcr.io/vwjf/mirroring:X.Y.Z` and does not change callers. Promote image pins that tag in `action.yml` on the branch you tagged (a PR only when that branch is the default); it does not create an Action tag or GitHub Release. The “image files match main” check runs only on the default branch (Promote on `main`, and CI after a push to `main`). Feature branches skip it. `gh release create vX.Y.Z` (or `vX.Y.Z-alpha`) is the Action pin; no workflow runs after that. Feature-branch pushes also publish `sha-*` and `branch-*` test tags. See [README.md — Publishing a release](README.md#publishing-a-release).
+They are separate artifacts. `image/vX.Y.Z` publishes `ghcr.io/vwjf/mirroring:X.Y.Z` and does not change callers. Promote image pins that tag in `action.yml` on the branch you tagged (a PR only when that branch is the default); it does not create an Action tag or GitHub Release. The “image files match main” check runs only on the default branch (Promote on `main`, and CI after a push to `main`). Feature branches skip it. `gh release create vX.Y.Z` (or `vX.Y.Z-alpha`) is the Action pin; no workflow runs after that. Feature-branch pushes also publish `sha-*` and `branch-*` test tags. See [DEVELOPER_GUIDE.md — Publishing a release](DEVELOPER_GUIDE.md#publishing-a-release).
 
 ### Where does the Action live?
 
@@ -231,7 +231,7 @@ This Action lives in its own repository, so `actions/checkout` of the **source**
 
 ### Can the manual mirror tests be automated?
 
-**Yes, as a local driver against real remotes.** `./tests/run.sh` uses `gh` and `glab` logins (public vs private does not change the command). It pushes disposable refs, waits for the caller workflow or GitLab’s native push mirror, and asserts the other side. It does not run `mirror.sh` locally. The seven tests are described in [tests/README.md](tests/README.md).
+**Yes, as a local driver against real remotes.** `./tests/run.sh` uses `gh` and `glab` logins (public vs private does not change the command). It pushes disposable refs, waits for the caller workflow or GitLab’s native push mirror, and asserts the other side. It does not run `mirror.sh` locally. See [DEVELOPER_GUIDE.md — Tests](DEVELOPER_GUIDE.md#tests) and [tests/README.md](tests/README.md).
 
 ### What is out of scope for v1?
 
