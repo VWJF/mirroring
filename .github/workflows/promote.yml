@@ -1,9 +1,9 @@
 name: Promote image
 
-# Release: open a pull request that pins action.yml to a published GHCR
-# semver tag. Does not create an Action git tag or GitHub Release.
-# Test pin: on a feature branch with no version, commit branch-<name> into
-# that branch's action.yml.
+# Open a pull request that pins action.yml to a published GHCR semver tag.
+# Does not create an Action git tag or GitHub Release.
+# On a feature branch with no version: commit branch-<name> into that
+# branch's action.yml.
 run-name: Promote image ${{ inputs.version || github.ref_name }}
 
 on:

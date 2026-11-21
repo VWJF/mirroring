@@ -221,7 +221,7 @@ It is not a pure composite (all bash on the runner) and not a pure Docker Action
 
 ### How are the image and the Action released?
 
-They are separate artifacts. `image/vX.Y.Z` publishes `ghcr.io/vwjf/mirroring:X.Y.Z` and does not change callers. A promotion pull request then pins that exact tag in `action.yml`. You tag the Action (`vX.Y.Z` or `vX.Y.Z-alpha`) after remote tests. Feature-branch pushes publish `sha-*` and `branch-*` test tags only. See [README.md — Publishing a release](README.md#publishing-a-release).
+They are separate artifacts. `image/vX.Y.Z` publishes `ghcr.io/vwjf/mirroring:X.Y.Z` and does not change callers. Promote image then opens a pull request that pins that tag in `action.yml`; it does not create an Action tag or GitHub Release. `gh release create vX.Y.Z` (or `vX.Y.Z-alpha`) is the Action pin; no workflow runs after that. Feature-branch pushes publish `sha-*` and `branch-*` test tags only. See [README.md — Publishing a release](README.md#publishing-a-release).
 
 ### Where does the Action live?
 

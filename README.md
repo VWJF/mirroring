@@ -268,9 +268,7 @@ CI fails pull requests into the default branch if `action.yml` still pins `branc
 
 1. From the commit you want in GHCR (usually the default branch), create an annotated tag `image/vX.Y.Z` or `image/vX.Y.Z-alpha.1` and push it. Plain `v*.*.*` Action tags do **not** publish an image.
 2. Wait for Publish image. That pushes `ghcr.io/vwjf/mirroring:<version>` and `v<version>`. A stable version also gets major and minor tags (`v1`, `v1.0`). `latest` is not pushed.
-3. Merge the promotion pull request opened by [Promote image](.github/workflows/promote.yml). It retags the existing `docker://` pin in `action.yml` to the exact version (`0.1.0`, not `v0.1.0`, not `1`) and only if `Dockerfile`, `entrypoint.sh`, `src/mirror.sh`, and `src/askpass.sh` still match the `image/v…` commit. The PR is opened with `GITHUB_TOKEN`, so required status checks do not run on it; Promote already inspects GHCR, matches image contents, and rejects `branch-*` / `sha-*` pins.
-
-Actions → **Publish image** on the default branch → `version` rebuilds that GHCR tag and does not promote. Actions → **Promote image** on the default branch with the same `version` opens the pin pull request after GHCR inspect succeeds.
+3. Merge the promotion pull request from [Promote image](.github/workflows/promote.yml). It retags the `docker://` pin in `action.yml` (`0.1.0`, not `v0.1.0`, not `1`) and does **not** create an Action tag or GitHub Release. You can also run Promote yourself (`gh workflow run promote.yml --ref main -f version=0.1.0-alpha.1`) after a dispatch rebuild. The PR is opened with `GITHUB_TOKEN`, so required status checks do not run on it; Promote already inspects GHCR, matches image contents, and rejects `branch-*` / `sha-*` pins.
 
 ```bash
 git tag -a image/v0.1.0-alpha.1 -m "image/v0.1.0-alpha.1"
@@ -280,16 +278,13 @@ git push origin image/v0.1.0-alpha.1
 
 ### Release the Action
 
-After the promotion merge and remote tests:
+After the promotion merge (and remote tests), create the GitHub Release. That tag is the caller pin. No workflow runs afterward.
 
 ```bash
-git pull
-git tag -a v0.0.6-alpha -m "v0.0.6-alpha"
-git push origin v0.0.6-alpha
-gh release create v0.0.6-alpha --title v0.0.6-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.1.0-alpha.1." --prerelease
+gh release create v0.0.6-alpha --generate-notes --prerelease
 ```
 
-Omit `--prerelease` for a stable `vX.Y.Z`. Callers pin `uses: VWJF/mirroring@v0.0.6-alpha`. The Action version and the image version do not have to match; the release notes name the `docker://` pin. After `v1.0.0`, move git tags `v1` and `v1.0` to that commit by hand. Do not move `v1` on this Action’s GitLab mirror while `keep_divergent_refs` is true.
+Omit `--prerelease` for a stable `vX.Y.Z`. Add `--target <sha>` if HEAD is not the promotion merge. You do not need a separate `git tag` / `git push`. Callers pin `uses: VWJF/mirroring@v0.0.6-alpha`. Put the `docker://` pin in the notes if you want it there. After `v1.0.0`, move `v1` / `v1.0` by hand if you use floating major tags. Do not move `v1` on this Action’s GitLab mirror while `keep_divergent_refs` is true.
 
 ## Tests
 
