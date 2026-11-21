@@ -85,7 +85,7 @@ Once you trust the feature branch, push `main` (or another **protected** branch)
 
 ## Run
 
-Log in once (`gh auth login`, `glab auth login --hostname <gitlab>`). Tokens come from those CLIs — do not export them. The caller needs the push-mirror workflow on `SOURCE_BRANCH`, Actions enabled, secret `GITLAB_TOKEN`, and variable `GITLAB_URL`. For tests 1–6 on an unprotected `e2e/mirror-*` branch, `ONLY_PROTECTED_BRANCHES=false`.
+Log in once (`gh auth login`, `glab auth login --hostname <gitlab>`). Tokens come from those CLIs — do not export them. The caller needs the push-mirror workflow on `SOURCE_BRANCH`, Actions enabled, secret `GITLAB_TOKEN`, and variable `GITLAB_URL`. For tests 1–6 on an unprotected `e2e/mirror-*` branch, `ONLY_PROTECTED_BRANCHES=false`. `SOURCE_BRANCH` is the caller branch that already has that workflow; it does not select which Action ref runs. To test an Action feature branch, set `uses: VWJF/mirroring@<branch>` in the caller workflow, pin that branch to its `branch-*` image, and wait until Publish image is green.
 
 ```bash
 export GITHUB_REPO=VWJF/temp-mirror
@@ -107,7 +107,7 @@ Used by [`helpers.sh`](helpers.sh) and [`run.sh`](run.sh). Do not set `SECONDS=`
 |---|---|
 | `SECONDS` | Bash builtin (seconds since the shell started). Wait loops use it as a deadline; not an export. |
 | `GITHUB_REPO` | Caller GitHub repo (`owner/name`; default `VWJF/temp-mirror`). |
-| `SOURCE_BRANCH` | Branch that already has the caller workflow (default: repo default branch). |
+| `SOURCE_BRANCH` | Caller branch that already has the push-mirror workflow (default: repo default branch). Does not select the Action git ref. |
 | `GITLAB_URL` | GitLab clone URL; if unset, read from the repo Actions variable of the same name. |
 
 **Optional**

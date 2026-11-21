@@ -18,14 +18,18 @@ jobs:
 
       - name: Shellcheck
         run: |
-          files=(src/*.sh entrypoint.sh)
+          files=(src/*.sh entrypoint.sh .github/scripts/*.sh)
           echo "Checking: ${files[*]}"
-          shellcheck -f gcc "${files[@]}"
+          shellcheck -x -P .github/scripts -f gcc "${files[@]}"
           echo "shellcheck passed (${#files[@]} files)"
           {
             echo "### Shellcheck"
             echo "Passed: \`${files[*]}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Forbid test image pins on default-branch PRs
+        if: github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch
+        run: bash .github/scripts/check-action-pin.sh --forbid-test-tags
 
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0

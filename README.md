@@ -243,7 +243,7 @@ jobs:
 
 The first checkout is optional if you rely on this Action’s inner checkout of `github.sha`. Keeping it is fine and makes the source tree available to later steps.
 
-Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://github.com/VWJF/mirroring/releases) (including pre-releases such as `0.0.5-alpha` until a stable `v1` exists). A commit SHA still works for bisect.
+Pin a **release tag**, not `@main`. Take the latest **Action** tag from [Releases](https://github.com/VWJF/mirroring/releases) (`0.0.5-alpha` today; later tags are `vX.Y.Z` or `vX.Y.Z-alpha`). After `v1.0.0`, callers can pin `@v1`. A commit SHA still works for bisect. Do not pin a GHCR `branch-*`, `sha-*`, or `latest` tag as the Action ref.
 
 > [!NOTE]
 > Set `GITLAB_URL` to the destination clone URL (for example `https://gitlab.rcg.sfu.ca/<user>/<repository>.git`). Do not hardcode a destination in the Action.
@@ -253,31 +253,43 @@ Pin a **release tag**, not `@main`. Take the latest tag from [Releases](https://
 
 ## Publishing a release
 
-The GHCR image must exist **before** callers can use a docker-pinned Action. Do not retag an existing release. Bump is for **any** version (stable or pre-release); a `-` in the version (for example `-alpha`) only means you should pass `--prerelease` when you create the GitHub Release.
+The GHCR **image** and the **Action** are separate artifacts. An image tag publishes a container and does not change callers. An Action tag is created only after `action.yml` pins an image that is already in GHCR. Existing tags `0.0.1-alpha` through `0.0.5-alpha` stay where they are. Do not move a released Action tag.
 
-1. **Publish image** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) — Actions → **Publish image** → Run workflow on this branch → `version` (for example `0.0.3-alpha`). Wait until it is green. This pushes `ghcr.io/vwjf/mirroring:0.0.3-alpha` and `v0.0.3-alpha`. It does **not** create a git tag or change `action.yml`.
-2. **Bump image** ([`.github/workflows/bump-image.yml`](.github/workflows/bump-image.yml)) — Actions → **Bump image** → the **same** `version`. This **retags** the existing `uses: docker://ghcr.io/vwjf/mirroring:<old>` pin in root `action.yml` to that version and commits that file on the branch you ran on (`chore: pin mirror image to <version>`). It no-ops if the pin is already that tag, and fails if GHCR has no such image (run Publish first) or if `action.yml` has no `docker://` pin (it does not convert a bash or docker-build step). It does **not** create a git tag or GitHub Release.
-3. **You** tag and create the GitHub Release (pre-release when the version contains `-`, e.g. `*-alpha`):
+### Test a feature branch
+
+1. Push the branch. [Publish image](.github/workflows/publish.yml) pushes `ghcr.io/vwjf/mirroring:sha-<commit>` and `branch-<name>` (`/` in the branch name becomes `-`, lowercased). It does **not** open a promotion pull request.
+2. Pin that test image on the branch (Actions → **Promote image** on this branch, leave `version` empty; or `gh workflow run promote.yml --ref <branch>`). This commits `uses: docker://ghcr.io/vwjf/mirroring:branch-<name>` on the feature branch only.
+3. Point the **caller** workflow at the branch (`uses: VWJF/mirroring@<branch>`). `SOURCE_BRANCH` in `./tests/run.sh` is the caller branch that already has that workflow file; it does not select the Action ref.
+4. Wait until Publish image is green, then run `./tests/run.sh`.
+
+CI fails pull requests into the default branch if `action.yml` still pins `branch-*` or `sha-*`. Restore a release image pin before merge, or let the promotion pull request set it.
+
+### Release an image
+
+1. From the commit you want in GHCR (usually the default branch), create an annotated tag `image/vX.Y.Z` or `image/vX.Y.Z-alpha.1` and push it. Plain `v*.*.*` Action tags do **not** publish an image.
+2. Wait for Publish image. That pushes `ghcr.io/vwjf/mirroring:<version>` and `v<version>`. A stable version also gets major and minor tags (`v1`, `v1.0`). `latest` is not pushed.
+3. Merge the promotion pull request opened by [Promote image](.github/workflows/promote.yml). It retags the existing `docker://` pin in `action.yml` to the exact version (`0.1.0`, not `v0.1.0`, not `1`) and only if `Dockerfile`, `entrypoint.sh`, `src/mirror.sh`, and `src/askpass.sh` still match the `image/v…` commit. The PR is opened with `GITHUB_TOKEN`, so required status checks do not run on it; Promote already inspects GHCR, matches image contents, and rejects `branch-*` / `sha-*` pins.
+
+Actions → **Publish image** on the default branch → `version` rebuilds that GHCR tag and does not promote. Actions → **Promote image** on the default branch with the same `version` opens the pin pull request after GHCR inspect succeeds.
+
+```bash
+git tag -a image/v0.1.0-alpha.1 -m "image/v0.1.0-alpha.1"
+git push origin image/v0.1.0-alpha.1
+# wait until Publish image is green, then merge the promotion pull request
+```
+
+### Release the Action
+
+After the promotion merge and remote tests:
 
 ```bash
 git pull
-git tag -a 0.0.3-alpha -m "0.0.3-alpha"
-git push origin 0.0.3-alpha
-gh release create 0.0.3-alpha --title 0.0.3-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.0.3-alpha." --prerelease
+git tag -a v0.0.6-alpha -m "v0.0.6-alpha"
+git push origin v0.0.6-alpha
+gh release create v0.0.6-alpha --title v0.0.6-alpha --notes "Pins the composite Action to docker://ghcr.io/vwjf/mirroring:0.1.0-alpha.1." --prerelease
 ```
 
-Omit `--prerelease` for a stable `x.y.z`. Callers then pin `uses: VWJF/mirroring@0.0.3-alpha`.
-
-From the CLI (needed until these workflows exist on the default branch):
-
-```bash
-gh workflow run publish.yml --ref dockerize -f version=0.0.3-alpha
-# wait until Publish image is green
-gh workflow run bump-image.yml --ref dockerize -f version=0.0.3-alpha
-# wait until Bump image is green (action.yml committed), then tag + gh release create as above
-```
-
-Pushing a matching git tag still runs Publish image. Prefer dispatch so the image exists before you tag the Action.
+Omit `--prerelease` for a stable `vX.Y.Z`. Callers pin `uses: VWJF/mirroring@v0.0.6-alpha`. The Action version and the image version do not have to match; the release notes name the `docker://` pin. After `v1.0.0`, move git tags `v1` and `v1.0` to that commit by hand. Do not move `v1` on this Action’s GitLab mirror while `keep_divergent_refs` is true.
 
 ## Tests
 

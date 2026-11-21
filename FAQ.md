@@ -219,9 +219,13 @@ Callers still use one `uses: VWJF/mirroring@…`. Inside, `action.yml` is a **co
 
 It is not a pure composite (all bash on the runner) and not a pure Docker Action (the whole job in one container). Self-hosted runners need Docker for the push step. The image is built from the repo-root `Dockerfile`; it copies those `src/` scripts.
 
+### How are the image and the Action released?
+
+They are separate artifacts. `image/vX.Y.Z` publishes `ghcr.io/vwjf/mirroring:X.Y.Z` and does not change callers. A promotion pull request then pins that exact tag in `action.yml`. You tag the Action (`vX.Y.Z` or `vX.Y.Z-alpha`) after remote tests. Feature-branch pushes publish `sha-*` and `branch-*` test tags only. See [README.md — Publishing a release](README.md#publishing-a-release).
+
 ### Where does the Action live?
 
-This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Pin the latest **release tag** from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`), not `@main`. There is no stable `v1.0.0` yet; current tags are pre-releases (for example `0.0.5-alpha`). A commit SHA still works for bisect. Do not use the GHCR image tag `latest` as the Action pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
+This repository: [VWJF/mirroring](https://github.com/VWJF/mirroring). Pin the latest **Action release tag** from [Releases](https://github.com/VWJF/mirroring/releases) (`uses: VWJF/mirroring@<tag>`), not `@main`. There is no stable `v1.0.0` yet; current tags are pre-releases (for example `0.0.5-alpha`). After `v1.0.0`, pin `@v1`. A commit SHA still works for bisect. Do not use GHCR tags `latest`, `branch-*`, or `sha-*` as the Action pin. Setup and inputs are in [README.md](README.md#setup). A sample caller is [VWJF/temp-mirror](https://github.com/VWJF/temp-mirror).
 
 This Action lives in its own repository, so `actions/checkout` of the **source** repo cannot delete `action.yml` / `src/` (`github.action_path` is this repo). It checks out the triggering SHA (or the default branch on delete events), not `main` on every run. GitLab credentials stay process-scoped (`GIT_ASKPASS` + `git -c`); the image does not write `~/.gitconfig`. See [Does this Action run on the runner or in Docker?](#does-this-action-run-on-the-runner-or-in-docker) and [What tokens are required?](#what-tokens-are-required).
 
