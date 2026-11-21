@@ -1,0 +1,168 @@
+name: Promote image
+
+# Pin action.yml to a published GHCR tag. Does not create an Action git tag
+# or GitHub Release. On the default branch: open a pin PR and require the
+# image files to match main. On a feature branch: commit the pin there
+# (version or, with version empty, branch-<name>) and skip the main check.
+run-name: Promote image ${{ inputs.version || github.ref_name }}
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Canonical GHCR version to pin (no image/ prefix, no leading v)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >
+          GHCR version to pin (e.g. 0.1.0). On the default branch this opens
+          a PR. On a feature branch it commits the pin there. Leave empty on
+          a feature branch to pin branch-<name>.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve promote mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/resolve-promote.sh
+
+      - name: Keep release scripts after switching refs
+        run: cp -a .github/scripts /tmp/release-scripts
+
+      - name: Check out pin target
+        env:
+          CHECKOUT_REF: ${{ steps.mode.outputs.checkout_ref }}
+          PIN_START: ${{ steps.mode.outputs.pin_start }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$CHECKOUT_REF"
+          start="${PIN_START:-origin/${CHECKOUT_REF}}"
+          git checkout -B "$CHECKOUT_REF" "$start"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if GHCR image does not exist
+        env:
+          PIN_TAG: ${{ steps.mode.outputs.pin_tag }}
+        run: |
+          set -euo pipefail
+          repo="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${repo}:${PIN_TAG}"
+          if ! docker buildx imagetools inspect "$image"; then
+            echo "::error::GHCR image ${image} does not exist yet. Wait for Publish image, or run it for this ref first."
+            exit 1
+          fi
+
+      - name: Require image contents to match main
+        if: steps.mode.outputs.match_default == 'true'
+        env:
+          IMAGE_GIT_TAG: ${{ steps.mode.outputs.image_git_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify "refs/tags/${IMAGE_GIT_TAG}"; then
+            git fetch origin "refs/tags/${IMAGE_GIT_TAG}:refs/tags/${IMAGE_GIT_TAG}"
+          fi
+          bash /tmp/release-scripts/image-contents-match.sh "$IMAGE_GIT_TAG" "origin/${DEFAULT_BRANCH}"
+
+      - name: Pin action.yml
+        env:
+          PIN_TAG: ${{ steps.mode.outputs.pin_tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash /tmp/release-scripts/action-image-pin.sh set "$PIN_TAG"
+
+      - name: Check release pin
+        if: steps.mode.outputs.mode == 'promote'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash /tmp/release-scripts/check-action-pin.sh --forbid-test-tags
+
+      - name: Check test pin
+        if: steps.mode.outputs.mode == 'pin-branch'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash /tmp/release-scripts/check-action-pin.sh
+
+      - name: Open promotion pull request
+        if: steps.mode.outputs.mode == 'promote'
+        env:
+          VERSION: ${{ steps.mode.outputs.version }}
+          IMAGE_GIT_TAG: ${{ steps.mode.outputs.image_git_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- action.yml; then
+            echo "action.yml already pins ${VERSION}; no promotion PR"
+            exit 0
+          fi
+
+          head="promote-image-${VERSION}"
+          git checkout -B "$head"
+          git add action.yml
+          git commit -m "chore: pin mirror image to ${VERSION}"
+          git push --force-with-lease origin "HEAD:refs/heads/${head}"
+
+          repo="${GITHUB_REPOSITORY,,}"
+          body="Pins the composite Action to \`docker://ghcr.io/${repo}:${VERSION}\` (image git tag \`${IMAGE_GIT_TAG}\`).
+
+          After merge and remote tests, \`gh release create\` is the Action pin. This pull request does not create an Action tag or GitHub Release. Do not pin \`branch-*\` or \`sha-*\` on the default branch."
+
+          existing="$(gh pr list --base "$DEFAULT_BRANCH" --head "$head" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            echo "Updated existing promotion PR #${existing}"
+            gh pr edit "$existing" --title "chore: pin mirror image to ${VERSION}" --body "$body"
+          else
+            gh pr create --base "$DEFAULT_BRANCH" --head "$head" \
+              --title "chore: pin mirror image to ${VERSION}" \
+              --body "$body"
+          fi
+
+      - name: Commit pin on this branch
+        if: steps.mode.outputs.mode == 'pin-branch'
+        env:
+          PIN_TAG: ${{ steps.mode.outputs.pin_tag }}
+          BRANCH: ${{ steps.mode.outputs.checkout_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- action.yml; then
+            echo "action.yml already pins ${PIN_TAG}"
+            exit 0
+          fi
+
+          git add action.yml
+          git commit -m "chore: pin mirror image to ${PIN_TAG}"
+          if ! git push origin "HEAD:${BRANCH}"; then
+            echo "::error::Failed to push pin to ${BRANCH}. If the branch moved past the image tag, retag from the tip or run Promote on that branch. Branch protection may also block GITHUB_TOKEN."
+            exit 1
+          fi

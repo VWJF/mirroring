@@ -1,0 +1,97 @@
+name: Publish image
+
+# Image builder only. Does not create a git tag, edit action.yml, or open a
+# GitHub Release. Release tags are image/vX.Y.Z. Branch pushes publish test
+# tags (sha-* and, off the default branch, branch-*). Dispatch rebuilds an
+# existing version and does not promote.
+run-name: Publish image ${{ inputs.version || github.ref_name }}
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "image/v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >
+          Image version to push to GHCR (e.g. 0.1.0 or 0.1.0-alpha.1). Leading
+          v and an image/ prefix are stripped. Overwrites that GHCR tag. Does
+          not open a promotion pull request.
+        required: true
+        type: string
+
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    outputs:
+      kind: ${{ steps.ver.outputs.kind }}
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve image tags
+        id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/resolve-publish.sh
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            latest=false
+          tags: |
+            # type=semver,pattern={{version}}
+            # type=semver,pattern={{version}},prefix=v
+            # type=semver,pattern={{major}}.{{minor}},prefix=v
+            # type=semver,pattern={{major}},prefix=v
+            # type=sha,prefix=sha-,enable=${{ github.event_name == 'push' }}
+            # type=raw,value=${{ steps.ver.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            # type=raw,value=v${{ steps.ver.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ steps.ver.outputs.version || 'skip' }},enable=${{ steps.ver.outputs.kind == 'release' || steps.ver.outputs.kind == 'rebuild' }}
+            type=raw,value=v${{ steps.ver.outputs.version || 'skip' }},enable=${{ steps.ver.outputs.kind == 'release' || steps.ver.outputs.kind == 'rebuild' }}
+            type=raw,value=v${{ steps.ver.outputs.major || '0' }}.${{ steps.ver.outputs.minor || '0' }},enable=${{ steps.ver.outputs.kind == 'release' && steps.ver.outputs.stable == 'true' }}
+            type=raw,value=v${{ steps.ver.outputs.major || '0' }},enable=${{ steps.ver.outputs.kind == 'release' && steps.ver.outputs.stable == 'true' }}
+            type=sha,prefix=sha-,enable=${{ steps.ver.outputs.kind == 'branch' }}
+            type=raw,value=${{ steps.ver.outputs.branch_tag || 'none' }},enable=${{ steps.ver.outputs.branch_tag != '' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  promote:
+    needs: ghcr
+    if: needs.ghcr.outputs.kind == 'release'
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    uses: ./.github/workflows/promote.yml
+    with:
+      version: ${{ needs.ghcr.outputs.version }}
