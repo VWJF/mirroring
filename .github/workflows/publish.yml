@@ -30,6 +30,7 @@ permissions:
   contents: read
   packages: write
 
+
 jobs:
   ghcr:
     runs-on: ubuntu-latest
