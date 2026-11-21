@@ -41,7 +41,8 @@ jobs:
           set -euo pipefail
           tag="$(bash .github/scripts/action-image-pin.sh get)"
           bash .github/scripts/check-action-pin.sh --forbid-test-tags
-          if git fetch origin "refs/tags/image/v${tag}:refs/tags/image/v${tag}"; then
+          if git rev-parse -q --verify "refs/tags/image/v${tag}" ||
+            git fetch origin "refs/tags/image/v${tag}:refs/tags/image/v${tag}"; then
             bash .github/scripts/image-contents-match.sh "image/v${tag}" HEAD
           else
             echo "No git tag image/v${tag}; skip contents match"

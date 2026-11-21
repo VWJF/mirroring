@@ -37,7 +37,8 @@ pin_version() {
 # image/v* tag from Publish: pin main if that commit is already on main,
 # otherwise pin the unique feature branch that has the tag.
 pin_from_image_tag() {
-  git fetch origin --prune --tags
+  # Heads only. fetch --tags clobbers the tag that triggered this run.
+  git fetch origin --prune --no-tags
   local tag_commit found="" b
   tag_commit="$(git rev-parse "${image_git_tag}^{commit}" 2>/dev/null || git rev-parse "HEAD^{commit}")"
 
