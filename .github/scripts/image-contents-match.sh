@@ -13,4 +13,4 @@ if git diff --quiet "$a" "$b" -- "${files[@]}"; then
   exit 0
 fi
 
-die "Image contents differ ($a vs $b). Tag image/v* from the current default branch instead of promoting this image."
+die "Image contents differ ($a vs $b). Retag image/v* from this branch and publish again."

@@ -1,9 +1,9 @@
 name: Promote image
 
-# Open a pull request that pins action.yml to a published GHCR semver tag.
-# Does not create an Action git tag or GitHub Release.
-# On a feature branch with no version: commit branch-<name> into that
-# branch's action.yml.
+# Pin action.yml to a published GHCR tag. Does not create an Action git tag
+# or GitHub Release. On the default branch: open a pin PR and require the
+# image files to match main. On a feature branch: commit the pin there
+# (version or, with version empty, branch-<name>) and skip the main check.
 run-name: Promote image ${{ inputs.version || github.ref_name }}
 
 on:
@@ -17,9 +17,9 @@ on:
     inputs:
       version:
         description: >
-          Release image version to pin on a PR into the default branch
-          (e.g. 0.1.0). Leave empty on a feature branch to pin branch-<name>
-          on that branch.
+          GHCR version to pin (e.g. 0.1.0). On the default branch this opens
+          a PR. On a feature branch it commits the pin there. Leave empty on
+          a feature branch to pin branch-<name>.
         required: false
         type: string
 
@@ -75,8 +75,8 @@ jobs:
             exit 1
           fi
 
-      - name: Require image contents to match the default branch
-        if: steps.mode.outputs.mode == 'promote'
+      - name: Require image contents to match main
+        if: steps.mode.outputs.match_default == 'true'
         env:
           IMAGE_GIT_TAG: ${{ steps.mode.outputs.image_git_tag }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -98,7 +98,7 @@ jobs:
         run: bash /tmp/release-scripts/check-action-pin.sh --forbid-test-tags
 
       - name: Check test pin
-        if: steps.mode.outputs.mode == 'test-pin'
+        if: steps.mode.outputs.mode == 'pin-branch'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: bash /tmp/release-scripts/check-action-pin.sh
@@ -129,9 +129,7 @@ jobs:
           repo="${GITHUB_REPOSITORY,,}"
           body="Pins the composite Action to \`docker://ghcr.io/${repo}:${VERSION}\` (image git tag \`${IMAGE_GIT_TAG}\`).
 
-          After merge and remote tests, tag the Action yourself (for example \`v0.0.6-alpha\`). Callers load that git tag: \`uses: VWJF/mirroring@<action-tag>\` loads \`docker://ghcr.io/${repo}:${VERSION}\`.
-
-          This pull request does not create an Action tag or GitHub Release. Do not pin \`branch-*\` or \`sha-*\` on the default branch."
+          After merge and remote tests, \`gh release create\` is the Action pin. This pull request does not create an Action tag or GitHub Release. Do not pin \`branch-*\` or \`sha-*\` on the default branch."
 
           existing="$(gh pr list --base "$DEFAULT_BRANCH" --head "$head" --state open --json number --jq '.[0].number // empty')"
           if [[ -n "$existing" ]]; then
@@ -143,8 +141,8 @@ jobs:
               --body "$body"
           fi
 
-      - name: Commit test pin on this branch
-        if: steps.mode.outputs.mode == 'test-pin'
+      - name: Commit pin on this branch
+        if: steps.mode.outputs.mode == 'pin-branch'
         env:
           PIN_TAG: ${{ steps.mode.outputs.pin_tag }}
           BRANCH: ${{ steps.mode.outputs.checkout_ref }}
@@ -161,6 +159,6 @@ jobs:
           git add action.yml
           git commit -m "chore: pin mirror image to ${PIN_TAG}"
           if ! git push origin "HEAD:${BRANCH}"; then
-            echo "::error::Failed to push test pin to ${BRANCH}. Branch protection may block GITHUB_TOKEN."
+            echo "::error::Failed to push pin to ${BRANCH}. Branch protection may block GITHUB_TOKEN."
             exit 1
           fi

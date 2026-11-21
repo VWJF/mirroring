@@ -257,28 +257,28 @@ The GHCR **image** and the **Action** are separate artifacts. An image tag publi
 
 ### Test a feature branch
 
-1. Push the branch. [Publish image](.github/workflows/publish.yml) pushes `ghcr.io/vwjf/mirroring:sha-<commit>` and `branch-<name>` (`/` in the branch name becomes `-`, lowercased). It does **not** open a promotion pull request.
-2. Pin that test image on the branch (Actions → **Promote image** on this branch, leave `version` empty; or `gh workflow run promote.yml --ref <branch>`). This commits `uses: docker://ghcr.io/vwjf/mirroring:branch-<name>` on the feature branch only.
+1. Push the branch. [Publish image](.github/workflows/publish.yml) pushes `ghcr.io/vwjf/mirroring:sha-<commit>` and `branch-<name>` (`/` in the branch name becomes `-`, lowercased). It does **not** pin `action.yml`.
+2. Pin an image on **this branch** (the main contents check is skipped): Actions → **Promote image** on the branch, leave `version` empty for `branch-<name>`, or pass the GHCR version after tagging `image/v…` from this commit (`gh workflow run promote.yml --ref <branch> -f version=0.1.0-alpha.1`).
 3. Point the **caller** workflow at the branch (`uses: VWJF/mirroring@<branch>`). `SOURCE_BRANCH` in `./tests/run.sh` is the caller branch that already has that workflow file; it does not select the Action ref.
 4. Wait until Publish image is green, then run `./tests/run.sh`.
 
-CI fails pull requests into the default branch if `action.yml` still pins `branch-*` or `sha-*`. Restore a release image pin before merge, or let the promotion pull request set it.
+CI fails pull requests into the default branch if `action.yml` still pins `branch-*` or `sha-*`. After merge, a push to the default branch checks that the pin’s `image/v…` sources match `main` (skipped if that git tag does not exist yet).
 
 ### Release an image
 
-1. From the commit you want in GHCR (usually the default branch), create an annotated tag `image/vX.Y.Z` or `image/vX.Y.Z-alpha.1` and push it. Plain `v*.*.*` Action tags do **not** publish an image.
+1. From the commit you want in GHCR, create an annotated tag `image/vX.Y.Z` or `image/vX.Y.Z-alpha.1` and push it. That commit can be on a feature branch or on the default branch. Plain `v*.*.*` Action tags do **not** publish an image.
 2. Wait for Publish image. That pushes `ghcr.io/vwjf/mirroring:<version>` and `v<version>`. A stable version also gets major and minor tags (`v1`, `v1.0`). `latest` is not pushed.
-3. Merge the promotion pull request from [Promote image](.github/workflows/promote.yml). It retags the `docker://` pin in `action.yml` (`0.1.0`, not `v0.1.0`, not `1`) and does **not** create an Action tag or GitHub Release. You can also run Promote yourself (`gh workflow run promote.yml --ref main -f version=0.1.0-alpha.1`) after a dispatch rebuild. The PR is opened with `GITHUB_TOKEN`, so required status checks do not run on it; Promote already inspects GHCR, matches image contents, and rejects `branch-*` / `sha-*` pins.
+3. [Promote image](.github/workflows/promote.yml) pins `action.yml` to that exact GHCR tag (`0.1.0`, not `v0.1.0`, not `1`) and does **not** create an Action tag or GitHub Release. On a feature branch it commits the pin there. On the default branch it opens a pin PR and requires the image files to match `main`. You can also run Promote yourself (`gh workflow run promote.yml --ref <branch> -f version=0.1.0-alpha.1`).
 
 ```bash
 git tag -a image/v0.1.0-alpha.1 -m "image/v0.1.0-alpha.1"
 git push origin image/v0.1.0-alpha.1
-# wait until Publish image is green, then merge the promotion pull request
+# wait until Publish image is green and the pin is on the branch
 ```
 
 ### Release the Action
 
-After the promotion merge (and remote tests), create the GitHub Release. That tag is the caller pin. No workflow runs afterward.
+After the pin is on the default branch (and remote tests), create the GitHub Release. That tag is the caller pin. No workflow runs afterward.
 
 ```bash
 gh release create v0.0.6-alpha --generate-notes --prerelease
