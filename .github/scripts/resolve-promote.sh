@@ -2,10 +2,10 @@
 # Set GITHUB_OUTPUT for Promote image:
 #   mode, version, image_git_tag, pin_tag, checkout_ref, pin_start, match_default
 #
-# A version on the default branch: open a pin PR (and compare image files to main).
-# A version on any other branch: commit that pin on that branch (skip the main check).
+# Always commit the pin on the target branch (default or feature). No PR.
+# A version on the default branch: also require image files to match main.
 # No version on a feature branch: commit branch-* on that branch.
-# An image/v* tag that is the default-branch tip: pin PR to main.
+# An image/v* tag that is the default-branch tip: pin main.
 # Any other image/v* tag: pin the unique feature branch, starting at the tag.
 set -euo pipefail
 # shellcheck source=common.sh
@@ -16,7 +16,7 @@ out() { echo "$1=$2" >>"$GITHUB_OUTPUT"; }
 
 [[ -n "${DEFAULT_BRANCH:-}" ]] || die "DEFAULT_BRANCH is not set"
 
-mode=""
+mode=pin-branch
 version=""
 image_git_tag=""
 branch_tag=""
@@ -47,7 +47,6 @@ pin_from_image_tag() {
   default_head="$(git rev-parse "origin/${DEFAULT_BRANCH}")"
 
   if [[ "$tag_commit" == "$default_head" ]]; then
-    mode=promote
     checkout_ref="$DEFAULT_BRANCH"
     match_default=true
     return
@@ -62,7 +61,6 @@ pin_from_image_tag() {
   done < <(branches_containing "$tag_commit")
 
   [[ -n "$found" ]] || die "Tag ${image_git_tag} is not on a remote branch. Run Promote from the branch to pin."
-  mode=pin-branch
   checkout_ref="$found"
   pin_start="$image_git_tag"
 }
@@ -72,17 +70,13 @@ if [[ -n "${INPUT_VERSION:-}" ]]; then
   if [[ "${REF_TYPE:-}" == branch ]]; then
     checkout_ref="$REF_NAME"
     if [[ "$REF_NAME" == "$DEFAULT_BRANCH" ]]; then
-      mode=promote
       match_default=true
-    else
-      mode=pin-branch
     fi
   else
     pin_from_image_tag
   fi
 
 elif [[ "${EVENT_NAME:-}" == workflow_dispatch && "${REF_TYPE:-}" == branch && "${REF_NAME:-}" != "$DEFAULT_BRANCH" ]]; then
-  mode=pin-branch
   branch_tag="$(bash "$dir/branch-image-tag.sh" "$REF_NAME")"
   pin_tag="$branch_tag"
   checkout_ref="$REF_NAME"

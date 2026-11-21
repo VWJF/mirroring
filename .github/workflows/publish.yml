@@ -18,7 +18,7 @@ on:
         description: >
           Image version to push to GHCR (e.g. 0.1.0 or 0.1.0-alpha.1). Leading
           v and an image/ prefix are stripped. Overwrites that GHCR tag. Does
-          not open a promotion pull request.
+          not pin action.yml.
         required: true
         type: string
 
@@ -90,7 +90,6 @@ jobs:
     if: needs.ghcr.outputs.kind == 'release'
     permissions:
       contents: write
-      pull-requests: write
       packages: read
     uses: ./.github/workflows/promote.yml
     with:

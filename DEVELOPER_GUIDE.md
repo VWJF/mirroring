@@ -23,7 +23,7 @@ CI fails pull requests into the default branch if `action.yml` still pins `branc
 
 1. From the commit you want in GHCR, create an annotated tag `image/vX.Y.Z` or `image/vX.Y.Z-alpha.1` and push it. That commit can be on a feature branch or on the default branch. Plain `v*.*.*` Action tags do **not** publish an image.
 2. Wait for Publish image. That pushes `ghcr.io/vwjf/mirroring:<version>` and `v<version>`. A stable version also gets major and minor tags (`v1`, `v1.0`). `latest` is not pushed.
-3. [Promote image](.github/workflows/promote.yml) pins `action.yml` to that exact GHCR tag (`0.1.0`, not `v0.1.0`, not `1`) and does **not** create an Action tag or GitHub Release. If the tag is the default-branch tip, it opens a pin PR and requires the image files to match `main`. Otherwise it commits the pin on the unique feature branch **from the tagged commit** (not the branch tip). You can also run Promote yourself (`gh workflow run promote.yml --ref <branch> -f version=0.1.0-alpha.1`). If the branch moved past the tag, retag from the tip or run Promote on that branch.
+3. [Promote image](.github/workflows/promote.yml) commits `action.yml` on the target branch to that exact GHCR tag (`0.1.0`, not `v0.1.0`, not `1`) and does **not** create an Action tag, GitHub Release, or pin PR. If the tag is the default-branch tip, it commits on `main` and requires the image files to match. Otherwise it commits on the unique feature branch **from the tagged commit**. You can also run Promote yourself (`gh workflow run promote.yml --ref <branch> -f version=0.1.0-alpha.1`). If the branch moved past the tag, retag from the tip or run Promote on that branch.
 
 ```bash
 git tag -a image/v0.1.0-alpha.1 -m "image/v0.1.0-alpha.1"
@@ -39,7 +39,7 @@ After the pin is on the default branch (and remote tests), create the GitHub Rel
 gh release create v0.0.6-alpha --generate-notes --prerelease
 ```
 
-Omit `--prerelease` for a stable `vX.Y.Z`. Add `--target <sha>` if HEAD is not the promotion merge. You do not need a separate `git tag` / `git push`. Callers pin `uses: VWJF/mirroring@v0.0.6-alpha`. Put the `docker://` pin in the notes if you want it there. After `v1.0.0`, move `v1` / `v1.0` by hand if you use floating major tags. Do not move `v1` on this Action’s GitLab mirror while `keep_divergent_refs` is true.
+Omit `--prerelease` for a stable `vX.Y.Z`. Add `--target <sha>` if HEAD is not the pin commit. You do not need a separate `git tag` / `git push`. Callers pin `uses: VWJF/mirroring@v0.0.6-alpha`. Put the `docker://` pin in the notes if you want it there. After `v1.0.0`, move `v1` / `v1.0` by hand if you use floating major tags. Do not move `v1` on this Action’s GitLab mirror while `keep_divergent_refs` is true.
 
 ## Tests
 
